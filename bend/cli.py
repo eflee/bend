@@ -61,7 +61,7 @@ def main():
         "  q.extend(total=lambda x: x.price * x.qty)  # add computed columns\n"
         "  q.filter(lambda x: x.region == 'CA')  # filter rows\n"
         "  q.transform(lambda x: {'name': x.first + ' ' + x.last})  # reshape\n"
-        "  q.hide_cols('id', 'internal')  # hide columns from display\n"
+        "  q.hide('id', 'internal')  # hide columns from display only\n"
         "  q = reload()  # reload from source, re-apply all changes\n"
         "  q = refresh()  # re-apply changes to base (no file reload)\n"
         "  q = q.rebase()  # flatten: make current state the new base\n"

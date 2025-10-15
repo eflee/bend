@@ -193,17 +193,17 @@ df = load_csv('report.csv', skip_rows=5)
 ### Managing Column Visibility
 
 ```python
-# Hide internal columns
-q.hide_cols('id', 'internal_code', 'audit_timestamp')
+# Hide internal columns from display (data still there!)
+q.hide('id', 'internal_code', 'audit_timestamp')
 
-# Show only specific columns
-q.show_cols('name', 'email', 'status')
+# Unhide specific columns
+q.unhide('id')
 
 # Unhide everything
-q.show_cols()
+q.unhide()
 
 # Hidden columns still work in calculations
-q.hide_cols('cost').extend(profit=lambda x: x.revenue - x.cost)
+q.hide('cost').extend(profit=lambda x: x.revenue - x.cost)
 ```
 
 ### Real-World Pipeline Example
@@ -219,8 +219,8 @@ result = (q
     .filter(lambda x: x.date.startswith('2024'))
     # Only successful transactions
     .filter(lambda x: x.status == 'completed')
-    # Hide internal fields
-    .hide_cols('internal_id', 'processor_code')
+    # Hide internal fields from display
+    .hide('internal_id', 'processor_code')
     # Sort by final amount
     .sort('final')
     # Top 100
@@ -422,7 +422,7 @@ print(f"Range: ${q.min('price')} - ${q.max('price')}")
 
 **Hidden columns are still usable:**
 ```python
-q.hide_cols('internal_cost').extend(profit=lambda x: x.price - x.internal_cost)
+q.hide('internal_cost').extend(profit=lambda x: x.price - x.internal_cost)
 ```
 
 **Reload when external data changes:**

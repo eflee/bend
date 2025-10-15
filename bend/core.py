@@ -361,40 +361,50 @@ class Q:
         print(f"Wrote {len(self.df)} rows to {filename}")
         return self
     
-    def hide_cols(self, *cols) -> 'Q':
-        """Hide columns from display (data is preserved, just not shown).
+    def hide(self, *cols) -> 'Q':
+        """Hide columns from display when printing.
+        
+        This is a DISPLAY-ONLY operation. Hidden columns:
+        - Are NOT removed from the DataFrame
+        - Still work in all operations (extend, filter, etc.)
+        - Are included in dump() output
+        - Are only hidden in print/repr/show()
         
         Args:
             *cols: Column names to hide from display
             
         Returns:
-            A new Q object with the specified columns hidden
+            A new Q object with the specified columns hidden from display
             
         Example:
-            >>> q.hide_cols('id', 'internal_field')
+            >>> q.hide('id', 'internal_field')  # Hide from display
+            >>> q.hide('cost').extend(profit=lambda x: x.revenue - x.cost)  # Still works!
         """
         new_hidden = self._hidden_cols | set(cols)
         return self._copy_with(hidden_cols=new_hidden)
     
-    def show_cols(self, *cols) -> 'Q':
-        """Show previously hidden columns, or show only specific columns if provided.
+    def unhide(self, *cols) -> 'Q':
+        """Unhide columns for display when printing.
+        
+        This is a DISPLAY-ONLY operation that reverses hide().
         
         Args:
-            *cols: If provided, show only these columns (hide all others).
-                   If empty, show all columns (unhide everything).
+            *cols: If provided, unhide these specific columns.
+                   If empty, unhide all columns.
             
         Returns:
             A new Q object with the specified visibility settings
             
         Example:
-            >>> q.show_cols()  # Show all columns
-            >>> q.show_cols('name', 'age')  # Show only name and age
+            >>> q.unhide()  # Unhide all columns
+            >>> q.unhide('id')  # Unhide just the id column
         """
         if cols:
-            all_cols = set(self.df.columns)
-            new_hidden = all_cols - set(cols)
+            # Unhide specific columns
+            new_hidden = self._hidden_cols - set(cols)
             return self._copy_with(hidden_cols=new_hidden)
         else:
+            # Unhide all columns
             return self._copy_with(hidden_cols=set())
     
     def reload(self) -> 'Q':

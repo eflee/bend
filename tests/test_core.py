@@ -359,14 +359,14 @@ class TestQAggregations:
         assert set(q.unique("x")) == {1, 2, 3}
 
 
-class TestQHideShowCols:
-    """Tests for Q.hide_cols() and Q.show_cols() methods."""
+class TestQHideUnhide:
+    """Tests for Q.hide() and Q.unhide() methods."""
 
-    def test_hide_cols(self):
-        """Should hide columns from display."""
+    def test_hide(self):
+        """Should hide columns from display only."""
         df = pd.DataFrame({"a": [1], "b": [2], "c": [3]})
         q = Q(df)
-        q2 = q.hide_cols("b")
+        q2 = q.hide("b")
         
         # Column exists in data
         assert "b" in q2.df.columns
@@ -377,26 +377,26 @@ class TestQHideShowCols:
         assert "c" in display
         assert "b" not in display
 
-    def test_show_cols_all(self):
-        """Should show all columns."""
+    def test_unhide_all(self):
+        """Should unhide all columns."""
         df = pd.DataFrame({"a": [1], "b": [2]})
-        q = Q(df).hide_cols("b")
-        q2 = q.show_cols()
+        q = Q(df).hide("b")
+        q2 = q.unhide()
         
         display = str(q2)
         assert "a" in display
         assert "b" in display
 
-    def test_show_cols_specific(self):
-        """Should show only specific columns."""
+    def test_unhide_specific(self):
+        """Should unhide specific columns."""
         df = pd.DataFrame({"a": [1], "b": [2], "c": [3]})
-        q = Q(df)
-        q2 = q.show_cols("a", "c")
+        q = Q(df).hide("b", "c")
+        q2 = q.unhide("b")
         
         display = str(q2)
         assert "a" in display
-        assert "c" in display
-        assert "b" not in display
+        assert "b" in display
+        assert "c" not in display  # Still hidden
 
 
 class TestQIntegration:

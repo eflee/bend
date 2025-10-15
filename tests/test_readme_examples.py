@@ -148,7 +148,7 @@ class TestReadmeExamples:
         assert q3.df.iloc[0]['commission'] == 22.5  # 150 * 0.15
 
     def test_column_visibility(self):
-        """Hide/show examples from README."""
+        """Hide/unhide examples from README."""
         df = pd.DataFrame({
             'id': [1, 2],
             'name': ['Alice', 'Bob'],
@@ -158,20 +158,21 @@ class TestReadmeExamples:
         q = Q(df)
         
         # Hide internal columns
-        q2 = q.hide_cols('id', 'cost')
+        q2 = q.hide('id', 'cost')
         assert 'id' in q2.df.columns  # Still in data
         display = str(q2)
         assert 'name' in display
         assert 'id' not in display
         
-        # Show only specific
-        q3 = q.show_cols('name', 'revenue')
+        # Unhide all
+        q3 = q2.unhide()
         display = str(q3)
         assert 'name' in display
-        assert 'revenue' in display
+        assert 'id' in display
+        assert 'cost' in display
         
         # Hidden columns work in calculations
-        q4 = q.hide_cols('cost').extend(profit=lambda x: x.revenue - x.cost)
+        q4 = q.hide('cost').extend(profit=lambda x: x.revenue - x.cost)
         assert 'profit' in q4.df.columns
         assert 'cost' not in str(q4)
 
@@ -193,7 +194,7 @@ class TestReadmeExamples:
             .extend(final=lambda x: x.total - x.discount)
             .filter(lambda x: x.date.startswith('2024'))
             .filter(lambda x: x.status == 'completed')
-            .hide_cols('internal_id')
+            .hide('internal_id')
             .sort('final')
             .head(10))
         
