@@ -1,6 +1,8 @@
 # Bend
 
-A precise CSV analysis tool with tracked change history. Load any CSV and start analyzing with a functional query interface.
+Bend is essentially pandas with training wheels + change tracking + CLI convenience.
+
+Load any CSV and start analyzing with a functional query interface.
 
 ## Installation
 
@@ -15,6 +17,31 @@ bend data.csv
 ```
 
 You'll get an interactive REPL with your data loaded as `q`.
+
+## Why Bend?
+
+Several CSV CLI tools exist (VisiData, csvkit, Miller, xsv, q/textql), but Bend fills a unique niche by combining pandas power with training wheels, change tracking, and CLI convenience.
+
+### What Makes Bend Different
+
+- **IPython REPL**: Full Python environment with pre-loaded data, not just command flags
+- **Programmatic**: Lambda functions instead of SQL or command-line flags
+- **Functional/Immutable**: Operations return new instances for safe experimentation
+- **Change Tracking**: Replay transformations on refreshed data with `reload()` and `refresh()`
+- **Method Chaining**: Fluent API for readable pipelines
+
+### Comparison
+
+| Tool | Approach | Best For |
+|------|----------|----------|
+| **Bend** | Interactive Python REPL | Exploratory analysis with Python |
+| VisiData | Visual TUI spreadsheet | Visual browsing and editing |
+| csvkit | Unix-style utilities | Shell scripting and SQL queries |
+| Miller | Stream processing | One-pass transformations |
+| xsv | Fast single commands | Quick operations on large files |
+| q/textql | SQL on CSV | SQL-centric analysis |
+
+**Bend is the sweet spot** between simple Unix tools and full Jupyter notebooks—perfect for data scientists who want more than `csvkit` but less overhead than a notebook environment.
 
 ## Examples
 
