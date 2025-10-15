@@ -585,4 +585,49 @@ class Q:
             Number of unique values
         """
         return self.df[col].nunique()
+    
+    def memory_usage(self, deep: bool = True) -> dict:
+        """Get memory usage breakdown for this Q object.
+        
+        Args:
+            deep: If True, introspect data for accurate memory usage (default: True)
+            
+        Returns:
+            Dictionary with memory usage in bytes for each component:
+            - 'current_df': Memory used by current DataFrame
+            - 'base_df': Memory used by base DataFrame
+            - 'changes': Number of tracked changes
+            - 'total': Total estimated memory usage
+            - 'total_mb': Total memory usage in megabytes
+            
+        Example:
+            >>> q2 = q.extend(total=lambda x: x.price * x.qty).filter(lambda x: x.total > 100)
+            >>> usage = q2.memory_usage()
+            >>> print(f"Using {usage['total_mb']:.2f} MB")
+        """
+        current_mem = self.df.memory_usage(deep=deep).sum()
+        base_mem = self._base_df.memory_usage(deep=deep).sum()
+        
+        # Estimate changes overhead (rough approximation)
+        # Each change stores function objects, dicts, etc.
+        # For multi-Q operations, this could include entire Q objects
+        changes_mem = 0
+        for change_type, change_data in self._changes:
+            if change_type in ("merge", "concat", "join"):
+                # If change_data contains a Q object, count its memory
+                if isinstance(change_data, dict) and "other" in change_data:
+                    other_q = change_data["other"]
+                    if isinstance(other_q, Q):
+                        changes_mem += other_q.memory_usage(deep=deep)["total"]
+        
+        total = current_mem + base_mem + changes_mem
+        
+        return {
+            "current_df": int(current_mem),
+            "base_df": int(base_mem),
+            "changes": len(self._changes),
+            "changes_memory": int(changes_mem),
+            "total": int(total),
+            "total_mb": round(total / (1024 * 1024), 2)
+        }
 

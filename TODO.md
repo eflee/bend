@@ -141,43 +141,184 @@ q.cast({'age': int, 'price': float, 'active': bool})
 
 ## Implementation Roadmap
 
+### Phase 0: Infrastructure (Completed)
+- [x] `memory_usage()` - Memory breakdown reporting
+
 ### Phase 1: Quick Wins (Easy + High Value)
 - [ ] `tail(n)` - Mirror of head()
-- [ ] `sample(n)` - Random sampling
-- [ ] `distinct()` - Deduplication
+- [ ] `sample(n)` or `sample(frac)` - Random sampling
+- [ ] `distinct()` or `distinct(*cols)` - Deduplication
 - [ ] `select(*cols)` - Column selection
 - [ ] `drop(*cols)` - Column removal
 - [ ] `rename(**mapping)` - Column renaming
 
-### Phase 2: Data Quality
-- [ ] `fillna(value)` - Fill missing values
-- [ ] `dropna(subset)` - Remove rows with nulls
+### Phase 2: Multi-Q Operations (Architecture Validated)
+Now feasible with reference-based approach:
+- [ ] `concat(other)` - Vertical stacking (simplest, implement first)
+- [ ] `merge(other, left_on, right_on, how)` - Join with explicit keys
+- [ ] `join(other, on, how)` - Convenience wrapper around merge
+- [ ] Set operations: `union(other)`, `intersect(other)`, `difference(other)`
+
+**Implementation notes:**
+- Store other Q by reference in change history
+- `memory_usage()` will account for referenced Qs
+- Use `rebase()` to drop references and flatten
+
+### Phase 3: Data Quality
+- [ ] `fillna(value)` or `fillna(mapping)` - Fill missing values
+- [ ] `dropna()` or `dropna(*cols)` - Remove rows with nulls
 - [ ] `replace(mapping)` - Value replacement
 
-### Phase 3: Complex Operations (Need Design)
-- [ ] `join(other, on, how)` - Multi-source tracking design needed
-- [ ] `merge(other, left_on, right_on, how)` - Same as join
-- [ ] `concat(other)` - Vertical stacking
+### Phase 4: Complex Operations (Design Required)
 - [ ] Window functions - Row isolation vs context trade-off
+- [ ] `pivot(index, columns, values)` - Reshaping
+- [ ] `melt(id_vars, value_vars)` - Unpivoting
 
-### Phase 4: Nice to Have
-- [ ] `pivot()` - Reshaping
-- [ ] `melt()` - Unpivoting  
-- [ ] `bin()` - Categorization helper
+### Phase 5: Nice to Have
+- [ ] `bin(col, bins, labels)` - Categorization helper
+- [ ] `q.save()` / `Q.load()` - Serialization with dill
 
 ## Design Principles to Maintain
 
-**Must preserve:**
+**Must preserve (P0 Requirements):**
 - ✅ Immutable operations (all return new Q)
-- ✅ Change tracking (can be replayed)
+- ✅ Change tracking and replay capability (`refresh()`, `reload()`)
+- ✅ Q as the core object - all operations return Q
+- ✅ Idempotency - same operations always produce same results
 - ✅ Simple, readable API
 - ✅ Works with the Row namedtuple pattern
 - ✅ Functional programming paradigm
 
+**Architecture for Multi-Q Operations (Merge/Join/Concat):**
+
+Multi-Q operations store the other Q **by reference** (not deep copy) in the change history:
+
+```python
+# Change history structure:
+[
+    ("extend", {"total": lambda x: x.price * x.qty}),
+    ("merge", {
+        "other": <reference_to_other_Q>,  # Just a reference
+        "on": "customer_id",
+        "how": "left"
+    }),
+    ("filter", lambda x: x.total > 100)
+]
+```
+
+**Key principles:**
+1. **No deep copies**: Store Q references directly - rely on Python's immutability contract
+2. **User responsibility**: If user mutates a Q after merging, behavior is undefined (gentleman's agreement)
+3. **Memory management**: Use `rebase()` to flatten history and drop Q references
+4. **Replay works**: `refresh()` and `reload()` replay merge using stored Q reference
+5. **Memory visibility**: `memory_usage()` reports memory including referenced Qs
+
+**Benefits:**
+- ✅ Replay preserved through Q references
+- ✅ Idempotent - same Q references produce same results
+- ✅ Memory efficient - no deep copies
+- ✅ Explicit memory management via `rebase()`
+- ✅ Clean, intuitive API
+
 **Challenges to solve:**
-- How to handle multi-source operations (join, concat)?
 - How to handle operations that need row context (window functions)?
 - When to make an operation "terminal" (like groupby) vs tracked?
+- Pickling/serialization of Q objects with lambdas (see below)
+
+## Serialization & Pickling
+
+**Current Status:**
+- ✅ Simple Q objects (no operations) are pickleable with standard `pickle`
+- ❌ Q objects with tracked changes containing lambdas are NOT pickleable
+- Root cause: Python's `pickle` module cannot serialize lambda functions
+
+**Use Cases Requiring Serialization:**
+- Saving analysis pipelines to disk for later replay
+- Multiprocessing (passing Q between processes)
+- Caching intermediate results
+- Sharing pipelines between team members
+
+**Solutions to Implement:**
+
+### Phase 1: Document Limitation
+- [ ] Document in README that Q with tracked changes is not pickleable
+- [ ] Recommend `rebase()` before pickling if replay isn't needed
+- [ ] Add example showing workaround
+
+### Phase 2: Add dill Support
+- [ ] Add `dill` as optional dependency: `pip install bend[serialization]`
+- [ ] Implement pickle support using dill when available
+- [ ] Add `q.save(filename)` and `Q.load(filename)` convenience methods
+- [ ] Test serialization roundtrip with all operation types
+
+```python
+# Implementation sketch:
+def save(self, filename: str) -> None:
+    """Save Q object to disk (requires dill for Q with lambdas)."""
+    try:
+        import dill
+        with open(filename, 'wb') as f:
+            dill.dump(self, f)
+    except ImportError:
+        if self._changes:
+            raise ImportError(
+                "Saving Q with tracked changes requires 'dill'. "
+                "Install with: pip install bend[serialization]"
+            )
+        import pickle
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
+
+@classmethod
+def load(cls, filename: str) -> 'Q':
+    """Load Q object from disk."""
+    try:
+        import dill
+        with open(filename, 'rb') as f:
+            return dill.load(f)
+    except ImportError:
+        import pickle
+        with open(filename, 'rb') as f:
+            return pickle.load(f)
+```
+
+### Phase 3: Alternative Approaches (Future)
+- [ ] Investigate `cloudpickle` as alternative to dill
+- [ ] Consider storing change history as serializable format (AST, not lambdas)
+- [ ] Evaluate trade-offs of each approach
+
+**Priority:** Medium - useful but not required for core REPL functionality
+
+## Memory Management
+
+**Implemented:**
+- [x] `memory_usage()` method - reports memory breakdown
+  - Current DataFrame memory
+  - Base DataFrame memory  
+  - Referenced Q objects in change history
+  - Total memory usage in bytes and MB
+
+**Usage:**
+```python
+q2 = q.extend(total=lambda x: x.price * x.qty)
+usage = q2.memory_usage()
+print(f"Total: {usage['total_mb']} MB")
+print(f"Changes: {usage['changes']} tracked operations")
+
+# After merge with large Q
+q3 = q2.merge(large_q, on='id')
+usage = q3.memory_usage()  # Includes large_q's memory
+print(f"Memory with merge: {usage['total_mb']} MB")
+
+# Flatten to reduce memory
+q4 = q3.rebase()  # Drops reference to large_q
+usage = q4.memory_usage()  # Should be smaller
+```
+
+**Future enhancements:**
+- [ ] Add warning when memory exceeds threshold
+- [ ] Add `memory_report()` with human-readable breakdown
+- [ ] Track memory delta between operations
 
 ## Testing Requirements
 

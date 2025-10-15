@@ -435,3 +435,51 @@ class TestQIntegration:
         assert len(q2._changes) == 5
         change_types = [c[0] for c in q2._changes]
         assert change_types == ["extend", "filter", "extend", "sort", "head"]
+
+
+class TestQMemoryUsage:
+    """Tests for Q.memory_usage() method."""
+
+    def test_memory_usage_simple(self):
+        """Should report memory usage for simple Q."""
+        df = pd.DataFrame({"x": range(100), "y": ["test"] * 100})
+        q = Q(df)
+        usage = q.memory_usage()
+        
+        assert "current_df" in usage
+        assert "base_df" in usage
+        assert "changes" in usage
+        assert "total" in usage
+        assert "total_mb" in usage
+        assert usage["changes"] == 0
+        assert usage["current_df"] > 0
+        assert usage["base_df"] > 0
+
+    def test_memory_usage_with_operations(self):
+        """Should track memory with operations."""
+        df = pd.DataFrame({"x": range(1000)})
+        q = Q(df)
+        # Filter significantly reduces rows
+        q2 = q.filter(lambda x: x.x < 10)
+        
+        usage = q2.memory_usage()
+        assert usage["changes"] == 1
+        assert usage["current_df"] > 0
+        assert usage["base_df"] > 0
+        # Current should be smaller than base (heavily filtered)
+        assert usage["current_df"] < usage["base_df"]
+
+    def test_memory_usage_after_rebase(self):
+        """Should show reduced memory after rebase."""
+        df = pd.DataFrame({"x": range(100)})
+        q = Q(df)
+        q2 = q.filter(lambda x: x.x < 50)  # Keep only half
+        
+        usage_before = q2.memory_usage()
+        assert usage_before["changes"] == 1
+        
+        q3 = q2.rebase()
+        usage_after = q3.memory_usage()
+        assert usage_after["changes"] == 0
+        # After rebase, current and base should be same size
+        assert usage_after["current_df"] == usage_after["base_df"]
