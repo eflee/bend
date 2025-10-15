@@ -148,8 +148,8 @@ q.cast({'age': int, 'price': float, 'active': bool})
 - [ ] `tail(n)` - Mirror of head()
 - [ ] `sample(n)` or `sample(frac)` - Random sampling
 - [ ] `distinct()` or `distinct(*cols)` - Deduplication
-- [ ] `select(*cols)` - Column selection
-- [ ] `drop(*cols)` - Column removal
+- [x] `select(*cols)` - Column selection (COMPLETED)
+- [x] `drop(*cols)` - Column removal (COMPLETED)
 - [ ] `rename(**mapping)` - Column renaming
 
 ### Phase 2: Multi-Q Operations (Architecture Validated)

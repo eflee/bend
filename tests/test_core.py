@@ -80,6 +80,24 @@ class TestQBasics:
         q = Q(df)
         assert len(q) == 10
 
+    def test_columns_property(self):
+        """Should return list of column names."""
+        df = pd.DataFrame({"name": ["Alice"], "age": [25], "city": ["NYC"]})
+        q = Q(df)
+        assert q.columns == ["name", "age", "city"]
+
+    def test_cols_alias(self):
+        """cols should be alias for columns."""
+        df = pd.DataFrame({"x": [1], "y": [2]})
+        q = Q(df)
+        assert q.cols == q.columns
+
+    def test_columns_includes_hidden(self):
+        """columns should include hidden columns."""
+        df = pd.DataFrame({"a": [1], "b": [2], "c": [3]})
+        q = Q(df).hide("b")
+        assert q.columns == ["a", "b", "c"]
+
 
 class TestQExtend:
     """Tests for Q.extend() method."""
@@ -357,6 +375,104 @@ class TestQAggregations:
         q = Q(df)
         assert q.nunique("x") == 3
         assert set(q.unique("x")) == {1, 2, 3}
+
+
+class TestQDropSelect:
+    """Tests for Q.drop() and Q.select() methods."""
+
+    def test_drop_single_column(self):
+        """Should remove a single column."""
+        df = pd.DataFrame({"a": [1], "b": [2], "c": [3]})
+        q = Q(df)
+        q2 = q.drop("b")
+        
+        assert "a" in q2.df.columns
+        assert "c" in q2.df.columns
+        assert "b" not in q2.df.columns
+        assert len(q2._changes) == 1
+        assert q2._changes[0][0] == "drop"
+
+    def test_drop_multiple_columns(self):
+        """Should remove multiple columns."""
+        df = pd.DataFrame({"a": [1], "b": [2], "c": [3], "d": [4]})
+        q = Q(df)
+        q2 = q.drop("b", "d")
+        
+        assert list(q2.df.columns) == ["a", "c"]
+
+    def test_drop_nonexistent_column(self):
+        """Should handle dropping nonexistent columns gracefully."""
+        df = pd.DataFrame({"a": [1], "b": [2]})
+        q = Q(df)
+        q2 = q.drop("a", "nonexistent")
+        
+        assert "b" in q2.df.columns
+        assert "a" not in q2.df.columns
+
+    def test_drop_prevents_column_use(self):
+        """Dropped columns cannot be used in subsequent operations."""
+        df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+        q = Q(df)
+        q2 = q.drop("b")
+        
+        # Trying to use dropped column should fail
+        try:
+            q3 = q2.extend(c=lambda x: x.b * 2)
+            # If we get here, it should fail when we access the data
+            list(q3)
+            assert False, "Should have raised AttributeError"
+        except AttributeError:
+            pass  # Expected
+
+    def test_select_keeps_specified(self):
+        """Should keep only specified columns."""
+        df = pd.DataFrame({"a": [1], "b": [2], "c": [3], "d": [4]})
+        q = Q(df)
+        q2 = q.select("a", "c")
+        
+        assert list(q2.df.columns) == ["a", "c"]
+        assert len(q2._changes) == 1
+        assert q2._changes[0][0] == "select"
+
+    def test_select_single_column(self):
+        """Should work with single column."""
+        df = pd.DataFrame({"a": [1], "b": [2]})
+        q = Q(df)
+        q2 = q.select("a")
+        
+        assert list(q2.df.columns) == ["a"]
+
+    def test_select_nonexistent_column(self):
+        """Should handle selecting nonexistent columns gracefully."""
+        df = pd.DataFrame({"a": [1], "b": [2]})
+        q = Q(df)
+        q2 = q.select("a", "nonexistent")
+        
+        assert list(q2.df.columns) == ["a"]
+
+    def test_select_is_inverse_of_drop(self):
+        """Select('a', 'b') should be equivalent to dropping everything except a and b."""
+        df = pd.DataFrame({"a": [1], "b": [2], "c": [3], "d": [4]})
+        q = Q(df)
+        
+        selected = q.select("a", "b")
+        dropped = q.drop("c", "d")
+        
+        assert list(selected.df.columns) == list(dropped.df.columns)
+
+    def test_drop_and_select_with_replay(self):
+        """Drop and select should work with refresh/reload."""
+        df = pd.DataFrame({"a": [1, 2], "b": [3, 4], "c": [5, 6]})
+        q = Q(df)
+        q2 = q.drop("b").extend(total=lambda x: x.a + x.c)
+        
+        assert "total" in q2.df.columns
+        assert "b" not in q2.df.columns
+        
+        # Refresh should re-apply drop and extend
+        q3 = q2.refresh()
+        assert "total" in q3.df.columns
+        assert "b" not in q3.df.columns
 
 
 class TestQHideUnhide:

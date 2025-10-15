@@ -163,6 +163,21 @@ class Q:
                 # Take first n rows
                 n = change_data
                 result = result.head(n)
+            
+            elif change_type == "drop":
+                # Drop specified columns
+                cols_to_drop = change_data
+                # Only drop columns that exist
+                cols_to_drop = [c for c in cols_to_drop if c in result.columns]
+                if cols_to_drop:
+                    result = result.drop(columns=cols_to_drop)
+            
+            elif change_type == "select":
+                # Select (keep) only specified columns
+                cols_to_keep = change_data
+                # Only keep columns that exist
+                cols_to_keep = [c for c in cols_to_keep if c in result.columns]
+                result = result[cols_to_keep]
         
         return result
     
@@ -208,6 +223,30 @@ class Q:
     def __len__(self) -> int:
         """Return the number of rows."""
         return len(self.df)
+    
+    @property
+    def columns(self) -> list:
+        """Return list of column names in the DataFrame.
+        
+        Returns:
+            List of column names (includes hidden columns)
+            
+        Example:
+            >>> q.columns
+            ['name', 'age', 'salary']
+            >>> # Use in lambdas:
+            >>> q.extend(total=lambda x: x.price * x.qty)
+        """
+        return self.df.columns.tolist()
+    
+    @property
+    def cols(self) -> list:
+        """Alias for columns. Return list of column names.
+        
+        Returns:
+            List of column names (includes hidden columns)
+        """
+        return self.columns
     
     def extend(self, **newcols) -> 'Q':
         """Add new columns to the DataFrame based on existing columns.
@@ -324,6 +363,47 @@ class Q:
             >>> q.sort('price', 'name', ascending=True)
         """
         new_changes = self._changes + [("sort", (cols, ascending))]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
+    
+    def drop(self, *cols) -> 'Q':
+        """Remove specified columns from the DataFrame.
+        
+        This is a structural change that actually removes columns from the data.
+        Different from hide() which only affects display.
+        
+        Args:
+            *cols: Column names to remove
+            
+        Returns:
+            A new Q object without the specified columns
+            
+        Example:
+            >>> q.drop('id', 'internal_field')  # Actually removes columns
+            >>> q.drop('temp').extend(...)  # Removed columns can't be used
+        """
+        new_changes = self._changes + [("drop", list(cols))]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
+    
+    def select(self, *cols) -> 'Q':
+        """Keep only specified columns, removing all others.
+        
+        This is equivalent to dropping all columns except the ones specified.
+        This is a structural change that actually removes columns from the data.
+        
+        Args:
+            *cols: Column names to keep
+            
+        Returns:
+            A new Q object with only the specified columns
+            
+        Example:
+            >>> q.select('name', 'email', 'age')  # Keep only these columns
+        """
+        new_changes = self._changes + [("select", list(cols))]
         new_df = self._apply_changes(self._base_df, new_changes)
         
         return self._copy_with(df=new_df, changes=new_changes)

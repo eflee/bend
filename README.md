@@ -54,6 +54,10 @@ $ bend sales.csv
 # View first rows
 q
 
+# Check available columns
+q.columns            # ['customer', 'amount', 'age', 'region']
+q.cols               # Alias for q.columns
+
 # Iterate through data
 for row in q:
     print(row.customer, row.amount)
@@ -190,10 +194,11 @@ $ bend report.csv --skip-rows 5
 df = load_csv('report.csv', skip_rows=5)
 ```
 
-### Managing Column Visibility
+### Column Operations
 
+**Display-only (hide/unhide):**
 ```python
-# Hide internal columns from display (data still there!)
+# Hide columns from display (data still there, still usable!)
 q.hide('id', 'internal_code', 'audit_timestamp')
 
 # Unhide specific columns
@@ -204,6 +209,18 @@ q.unhide()
 
 # Hidden columns still work in calculations
 q.hide('cost').extend(profit=lambda x: x.revenue - x.cost)
+```
+
+**Structural changes (drop/select):**
+```python
+# Actually remove columns from data
+q.drop('id', 'temp_field')  # Removed columns can't be used later
+
+# Keep only specified columns (drops all others)
+q.select('name', 'email', 'status')
+
+# Dropped columns can't be used in calculations
+q.drop('cost').extend(profit=lambda x: x.revenue - x.cost)  # Error!
 ```
 
 ### Real-World Pipeline Example
