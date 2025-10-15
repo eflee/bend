@@ -1,0 +1,588 @@
+"""Core functionality for CSV loading and querying - New architecture."""
+
+import re
+from collections import defaultdict
+from typing import Callable, Dict, List, Tuple, Any
+import pandas as pd
+
+
+def _gsheets_csv(url: str) -> str:
+    """Convert a Google Sheets URL to a CSV export URL.
+    
+    Args:
+        url: Either a regular URL or a Google Sheets URL
+        
+    Returns:
+        CSV export URL if input was a Google Sheets URL, otherwise the original URL
+    """
+    m = re.search(r"/spreadsheets/d/([^/]+)/", url)
+    if not m:
+        return url
+    sheet_id = m.group(1)
+    gid = "0"
+    g = re.search(r"(?:[#?&]gid=)(\d+)", url)
+    if g:
+        gid = g.group(1)
+    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+
+
+def load_csv(path_or_url: str, skip_rows: int = 0) -> pd.DataFrame:
+    """Load a CSV file from a local path, URL, or Google Sheets URL.
+    
+    Args:
+        path_or_url: Path to a local CSV file, a URL, or a Google Sheets URL
+        skip_rows: Number of rows to skip at the beginning of the file (default: 0)
+        
+    Returns:
+        A pandas DataFrame containing the CSV data
+    """
+    u = _gsheets_csv(path_or_url)
+    if skip_rows > 0:
+        return pd.read_csv(u, skiprows=skip_rows)
+    return pd.read_csv(u)
+
+
+def rows(df: pd.DataFrame):
+    """Convert a DataFrame into an iterable of Row namedtuples with dot-accessible columns.
+    
+    Column names are sanitized to be valid Python identifiers by replacing
+    non-alphanumeric characters with underscores.
+    
+    Args:
+        df: A pandas DataFrame
+        
+    Yields:
+        Row namedtuples where each column is accessible as an attribute
+        
+    Example:
+        >>> for row in rows(df):
+        ...     print(row.column_name)
+    """
+    safe_cols = [re.sub(r'[^0-9a-zA-Z_]', '_', c) for c in df.columns]
+    df2 = df.copy()
+    df2.columns = safe_cols
+    return df2.itertuples(index=False, name="Row")
+
+
+class Q:
+    """A query interface with tracked change history and replay capabilities.
+    
+    Q maintains a base DataFrame and a list of changes (extensions, transformations,
+    filtrations). The current state can always be reconstructed from base + changes.
+    
+    Args:
+        df: A pandas DataFrame to wrap as the base state
+        source_path: Optional path to source CSV file for reload functionality
+        skip_rows: Number of rows to skip when loading from source
+        
+    Example:
+        >>> q = Q(df, source_path='data.csv')
+        >>> q2 = q.extend(total=lambda x: x.price * x.qty)
+        >>> q3 = q2.filter(lambda x: x.total > 100)
+        >>> q3.refresh()  # Re-apply changes to base data
+    """
+    
+    def __init__(
+        self, 
+        df: pd.DataFrame, 
+        source_path: str = None,
+        skip_rows: int = 0,
+        base_df: pd.DataFrame = None,
+        changes: List[Tuple[str, Any]] = None,
+        hidden_cols: set = None
+    ):
+        """Initialize a Q object with a DataFrame.
+        
+        Args:
+            df: Current state DataFrame
+            source_path: Optional path to source CSV file
+            skip_rows: Number of rows to skip when loading from source
+            base_df: Base DataFrame (if None, df is used as base)
+            changes: List of tracked changes
+            hidden_cols: Set of column names to hide from display
+        """
+        self._base_df = base_df if base_df is not None else df.copy()
+        self._changes: List[Tuple[str, Any]] = changes or []
+        self._source_path = source_path
+        self._skip_rows = skip_rows
+        self._hidden_cols = hidden_cols or set()
+        self.df = df
+    
+    def _apply_changes(self, base: pd.DataFrame, changes: List[Tuple[str, Any]] = None) -> pd.DataFrame:
+        """Apply tracked changes to a base DataFrame.
+        
+        Args:
+            base: The base DataFrame to apply changes to
+            changes: List of changes to apply (if None, uses self._changes)
+            
+        Returns:
+            DataFrame with all changes applied
+        """
+        result = base.copy()
+        changes_to_apply = changes if changes is not None else self._changes
+        
+        for change_type, change_data in changes_to_apply:
+            if change_type == "extend":
+                # Add new columns
+                add = {}
+                for col_name, fn in change_data.items():
+                    add[col_name] = [fn(r) for r in rows(result)]
+                result = pd.concat([result.reset_index(drop=True), pd.DataFrame(add)], axis=1)
+            
+            elif change_type == "transform":
+                # Transform rows to new structure
+                fn = change_data
+                recs = []
+                for r in rows(result):
+                    out = fn(r)
+                    if isinstance(out, dict):
+                        recs.append(out)
+                    elif isinstance(out, tuple):
+                        recs.append({f"c{i}": v for i, v in enumerate(out)})
+                    else:
+                        recs.append({"value": out})
+                result = pd.DataFrame.from_records(recs)
+            
+            elif change_type == "filter":
+                # Filter rows
+                fn = change_data
+                mask = []
+                for r in rows(result):
+                    try:
+                        mask.append(bool(fn(r)))
+                    except Exception:
+                        mask.append(False)
+                result = result[mask]
+            
+            elif change_type == "sort":
+                # Sort by columns
+                cols, ascending = change_data
+                result = result.sort_values(list(cols) or result.columns.tolist(), ascending=ascending)
+            
+            elif change_type == "head":
+                # Take first n rows
+                n = change_data
+                result = result.head(n)
+        
+        return result
+    
+    def _copy_with(self, **kwargs) -> 'Q':
+        """Create a new Q instance with updated attributes.
+        
+        Args:
+            **kwargs: Attributes to update
+            
+        Returns:
+            New Q instance
+        """
+        params = {
+            'df': self.df,
+            'source_path': self._source_path,
+            'skip_rows': self._skip_rows,
+            'base_df': self._base_df,
+            'changes': self._changes.copy(),
+            'hidden_cols': self._hidden_cols.copy()
+        }
+        params.update(kwargs)
+        return Q(**params)
+    
+    def _display_df(self) -> pd.DataFrame:
+        """Get DataFrame with hidden columns excluded for display."""
+        if self._hidden_cols:
+            visible_cols = [c for c in self.df.columns if c not in self._hidden_cols]
+            return self.df[visible_cols]
+        return self.df
+    
+    def __repr__(self) -> str:
+        """Return a string representation for the REPL."""
+        return self._display_df().head(20).to_string(index=False)
+    
+    def __str__(self) -> str:
+        """Return a string representation for print()."""
+        return self._display_df().head(20).to_string(index=False)
+    
+    def __iter__(self):
+        """Make Q iterable - iterates over rows as namedtuples."""
+        return iter(rows(self.df))
+    
+    def __len__(self) -> int:
+        """Return the number of rows."""
+        return len(self.df)
+    
+    def extend(self, **newcols) -> 'Q':
+        """Add new columns to the DataFrame based on existing columns.
+        
+        Args:
+            **newcols: Keyword arguments where keys are new column names and
+                      values are functions that take a Row and return the new value
+                      
+        Returns:
+            A new Q object with the additional columns
+            
+        Example:
+            >>> q.extend(total=lambda x: x.price * x.qty, tax=lambda x: x.total * 0.08)
+        """
+        new_changes = self._changes + [("extend", newcols)]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
+    
+    def transform(self, fn: Callable) -> 'Q':
+        """Transform each row using a function, creating new columns.
+        
+        Args:
+            fn: A function that takes a Row and returns:
+                - A dict: keys become column names
+                - A tuple: creates columns named c0, c1, etc.
+                - Any other value: creates a single 'value' column
+                
+        Returns:
+            A new Q object with the transformed data
+            
+        Example:
+            >>> q.transform(lambda x: {'name': x.first + ' ' + x.last, 'age': x.age})
+        """
+        new_changes = self._changes + [("transform", fn)]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
+    
+    def filter(self, fn: Callable) -> 'Q':
+        """Filter rows based on a predicate function.
+        
+        Args:
+            fn: A function that takes a Row and returns a boolean
+            
+        Returns:
+            A new Q object containing only rows where fn(row) is True
+            
+        Example:
+            >>> q.filter(lambda x: x.region == 'CA')
+        """
+        new_changes = self._changes + [("filter", fn)]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
+    
+    def groupby(self, keyfn: Callable, **aggs) -> 'Q':
+        """Group rows by a key function and compute aggregations.
+        
+        Note: This is a terminal operation that resets the change history.
+        
+        Args:
+            keyfn: A function that takes a Row and returns a grouping key
+            **aggs: Keyword arguments where keys are result column names and
+                   values are functions that take a list of Rows and return an aggregated value
+                   
+        Returns:
+            A new Q object with one row per group (change history reset)
+            
+        Example:
+            >>> q.groupby(lambda x: x.category, 
+            ...           total_sales=lambda g: sum(r.amount for r in g),
+            ...           count=lambda g: len(g))
+        """
+        buckets = defaultdict(list)
+        for r in rows(self.df):
+            buckets[keyfn(r)].append(r)
+        out = []
+        for k, grp in buckets.items():
+            rec = {"key": k}
+            for name, fn in aggs.items():
+                rec[name] = fn(grp)
+            out.append(rec)
+        
+        # groupby is terminal - resets to new base
+        new_df = pd.DataFrame(out)
+        return Q(new_df)
+    
+    def head(self, n: int = 5) -> 'Q':
+        """Return the first n rows.
+        
+        Args:
+            n: Number of rows to return (default: 5)
+            
+        Returns:
+            A new Q object containing the first n rows
+        """
+        new_changes = self._changes + [("head", n)]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
+    
+    def sort(self, *cols, ascending: bool = False) -> 'Q':
+        """Sort the DataFrame by one or more columns.
+        
+        Args:
+            *cols: Column names to sort by. If empty, sorts by all columns.
+            ascending: Whether to sort in ascending order (default: False)
+            
+        Returns:
+            A new Q object with sorted rows
+            
+        Example:
+            >>> q.sort('price', 'name', ascending=True)
+        """
+        new_changes = self._changes + [("sort", (cols, ascending))]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
+    
+    def show(self, n: int = 20) -> 'Q':
+        """Print the first n rows of the DataFrame (respects hidden columns).
+        
+        Args:
+            n: Number of rows to display (default: 20)
+            
+        Returns:
+            Self for method chaining
+        """
+        print(self._display_df().head(n).to_string(index=False))
+        return self
+    
+    def to_df(self) -> pd.DataFrame:
+        """Return the underlying pandas DataFrame.
+        
+        Returns:
+            The current state DataFrame
+        """
+        return self.df
+    
+    def dump(self, filename: str) -> 'Q':
+        """Write the DataFrame to a CSV file (writes all columns, including hidden ones).
+        
+        Args:
+            filename: Path to the output CSV file
+            
+        Returns:
+            Self for method chaining
+        """
+        self.df.to_csv(filename, index=False)
+        print(f"Wrote {len(self.df)} rows to {filename}")
+        return self
+    
+    def hide_cols(self, *cols) -> 'Q':
+        """Hide columns from display (data is preserved, just not shown).
+        
+        Args:
+            *cols: Column names to hide from display
+            
+        Returns:
+            A new Q object with the specified columns hidden
+            
+        Example:
+            >>> q.hide_cols('id', 'internal_field')
+        """
+        new_hidden = self._hidden_cols | set(cols)
+        return self._copy_with(hidden_cols=new_hidden)
+    
+    def show_cols(self, *cols) -> 'Q':
+        """Show previously hidden columns, or show only specific columns if provided.
+        
+        Args:
+            *cols: If provided, show only these columns (hide all others).
+                   If empty, show all columns (unhide everything).
+            
+        Returns:
+            A new Q object with the specified visibility settings
+            
+        Example:
+            >>> q.show_cols()  # Show all columns
+            >>> q.show_cols('name', 'age')  # Show only name and age
+        """
+        if cols:
+            all_cols = set(self.df.columns)
+            new_hidden = all_cols - set(cols)
+            return self._copy_with(hidden_cols=new_hidden)
+        else:
+            return self._copy_with(hidden_cols=set())
+    
+    def reload(self) -> 'Q':
+        """Reload data from the source CSV file and re-apply all tracked changes.
+        
+        Validates that all original columns still exist in the reloaded data.
+        New columns and rows are allowed.
+        
+        Returns:
+            A new Q object with reloaded base data and re-applied changes
+            
+        Raises:
+            ValueError: If no source path was provided or if required columns are missing
+            
+        Example:
+            >>> q2 = q.extend(total=lambda x: x.price * x.qty)
+            >>> q3 = q2.reload()  # Reloads from source and re-applies total column
+        """
+        if not self._source_path:
+            raise ValueError("Cannot reload: no source path available")
+        
+        # Reload the data from source
+        new_base = load_csv(self._source_path, skip_rows=self._skip_rows)
+        
+        # Validate that all original base columns still exist
+        original_cols = set(self._base_df.columns)
+        new_cols = set(new_base.columns)
+        missing_cols = original_cols - new_cols
+        
+        if missing_cols:
+            raise ValueError(
+                f"Cannot reload: required columns missing from source: {', '.join(sorted(missing_cols))}"
+            )
+        
+        # Re-apply all changes to new base
+        new_df = self._apply_changes(new_base)
+        
+        return self._copy_with(df=new_df, base_df=new_base)
+    
+    def refresh(self) -> 'Q':
+        """Re-apply all tracked changes to the in-memory base DataFrame.
+        
+        This recomputes the current state from base + changes without reloading from disk.
+        Useful for resetting any manual DataFrame manipulations.
+        
+        Returns:
+            A new Q object with changes re-applied to base
+            
+        Example:
+            >>> q2 = q.extend(total=lambda x: x.price * x.qty)
+            >>> q3 = q2.refresh()  # Re-applies the extension
+        """
+        new_df = self._apply_changes(self._base_df)
+        return self._copy_with(df=new_df)
+    
+    def rebase(self) -> 'Q':
+        """Flatten the change history by making the current state the new base.
+        
+        The current DataFrame becomes the new base, and the change list is cleared.
+        This is useful for performance when you have a long change history.
+        
+        Returns:
+            A new Q object with current state as base and empty change list
+            
+        Example:
+            >>> q2 = q.extend(a=...).filter(...).extend(b=...).filter(...)
+            >>> q3 = q2.rebase()  # Flattens: current state becomes new base
+        """
+        return Q(
+            df=self.df.copy(),
+            source_path=self._source_path,
+            skip_rows=self._skip_rows,
+            base_df=self.df.copy(),
+            changes=[],
+            hidden_cols=self._hidden_cols.copy()
+        )
+    
+    # Aggregation methods (informational, don't modify state)
+    
+    def sum(self, col: str) -> float:
+        """Compute sum of a column.
+        
+        Args:
+            col: Column name
+            
+        Returns:
+            Sum of the column
+        """
+        return self.df[col].sum()
+    
+    def mean(self, col: str) -> float:
+        """Compute mean of a column.
+        
+        Args:
+            col: Column name
+            
+        Returns:
+            Mean of the column
+        """
+        return self.df[col].mean()
+    
+    def median(self, col: str) -> float:
+        """Compute median of a column.
+        
+        Args:
+            col: Column name
+            
+        Returns:
+            Median of the column
+        """
+        return self.df[col].median()
+    
+    def min(self, col: str):
+        """Compute minimum of a column.
+        
+        Args:
+            col: Column name
+            
+        Returns:
+            Minimum value in the column
+        """
+        return self.df[col].min()
+    
+    def max(self, col: str):
+        """Compute maximum of a column.
+        
+        Args:
+            col: Column name
+            
+        Returns:
+            Maximum value in the column
+        """
+        return self.df[col].max()
+    
+    def count(self, col: str = None) -> int:
+        """Count non-null values in a column, or total rows if no column specified.
+        
+        Args:
+            col: Optional column name
+            
+        Returns:
+            Count of non-null values or total rows
+        """
+        if col:
+            return self.df[col].count()
+        return len(self.df)
+    
+    def std(self, col: str) -> float:
+        """Compute standard deviation of a column.
+        
+        Args:
+            col: Column name
+            
+        Returns:
+            Standard deviation of the column
+        """
+        return self.df[col].std()
+    
+    def var(self, col: str) -> float:
+        """Compute variance of a column.
+        
+        Args:
+            col: Column name
+            
+        Returns:
+            Variance of the column
+        """
+        return self.df[col].var()
+    
+    def unique(self, col: str) -> list:
+        """Get unique values in a column.
+        
+        Args:
+            col: Column name
+            
+        Returns:
+            List of unique values
+        """
+        return self.df[col].unique().tolist()
+    
+    def nunique(self, col: str) -> int:
+        """Count unique values in a column.
+        
+        Args:
+            col: Column name
+            
+        Returns:
+            Number of unique values
+        """
+        return self.df[col].nunique()
+

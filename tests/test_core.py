@@ -1,0 +1,437 @@
+"""Tests for bend.core module with new architecture."""
+
+import pytest
+import pandas as pd
+import tempfile
+import os
+from bend.core import Q, load_csv, rows, _gsheets_csv
+
+
+class TestHelperFunctions:
+    """Tests for helper functions."""
+
+    def test_gsheets_csv_regular_url(self):
+        """Regular URLs should pass through unchanged."""
+        url = "https://example.com/data.csv"
+        assert _gsheets_csv(url) == url
+
+    def test_gsheets_csv_conversion(self):
+        """Google Sheets URL should be converted."""
+        url = "https://docs.google.com/spreadsheets/d/abc123/edit#gid=456"
+        expected = "https://docs.google.com/spreadsheets/d/abc123/export?format=csv&gid=456"
+        assert _gsheets_csv(url) == expected
+
+    def test_load_csv_basic(self, tmp_path):
+        """Should load a basic CSV file."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("name,age\nAlice,25\nBob,30\n")
+        
+        df = load_csv(str(csv_file))
+        assert len(df) == 2
+        assert list(df.columns) == ["name", "age"]
+
+    def test_load_csv_with_skip_rows(self, tmp_path):
+        """Should skip specified rows."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("# Comment\n# Header\nname,age\nAlice,25\n")
+        
+        df = load_csv(str(csv_file), skip_rows=2)
+        assert len(df) == 1
+        assert list(df.columns) == ["name", "age"]
+
+    def test_rows_function(self):
+        """Should convert DataFrame to iterable of Row namedtuples."""
+        df = pd.DataFrame({"name": ["Alice", "Bob"], "age": [25, 30]})
+        row_list = list(rows(df))
+        
+        assert len(row_list) == 2
+        assert row_list[0].name == "Alice"
+        assert row_list[0].age == 25
+
+
+class TestQBasics:
+    """Tests for Q basic functionality."""
+
+    def test_init(self):
+        """Should initialize Q with a DataFrame."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        assert len(q) == 3
+        assert list(q.df.columns) == ["x"]
+
+    def test_repr_and_str(self):
+        """Should have string representation."""
+        df = pd.DataFrame({"name": ["Alice"], "age": [25]})
+        q = Q(df)
+        result = str(q)
+        assert "Alice" in result
+        assert "25" in result
+
+    def test_iterable(self):
+        """Q should be iterable."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        values = [row.x for row in q]
+        assert values == [1, 2, 3]
+
+    def test_len(self):
+        """Should return number of rows."""
+        df = pd.DataFrame({"x": range(10)})
+        q = Q(df)
+        assert len(q) == 10
+
+
+class TestQExtend:
+    """Tests for Q.extend() method."""
+
+    def test_extend_single_column(self):
+        """Should add a single computed column."""
+        df = pd.DataFrame({"price": [10, 20], "qty": [2, 3]})
+        q = Q(df)
+        q2 = q.extend(total=lambda x: x.price * x.qty)
+        
+        assert "total" in q2.df.columns
+        assert list(q2.df["total"]) == [20, 60]
+        assert "price" in q2.df.columns  # Original preserved
+
+    def test_extend_multiple_columns(self):
+        """Should add multiple computed columns."""
+        df = pd.DataFrame({"x": [1, 2]})
+        q = Q(df)
+        q2 = q.extend(double=lambda x: x.x * 2, triple=lambda x: x.x * 3)
+        
+        assert "double" in q2.df.columns
+        assert "triple" in q2.df.columns
+        assert list(q2.df["double"]) == [2, 4]
+        assert list(q2.df["triple"]) == [3, 6]
+
+    def test_extend_chained(self):
+        """Should allow chained extends."""
+        df = pd.DataFrame({"price": [10, 20], "qty": [2, 3]})
+        q = Q(df)
+        q2 = q.extend(total=lambda x: x.price * x.qty)
+        q3 = q2.extend(tax=lambda x: x.total * 0.1)
+        
+        assert "total" in q3.df.columns
+        assert "tax" in q3.df.columns
+        assert list(q3.df["tax"]) == [2.0, 6.0]
+
+    def test_extend_tracks_changes(self):
+        """Should track extends in change history."""
+        df = pd.DataFrame({"x": [1]})
+        q = Q(df)
+        q2 = q.extend(y=lambda x: x.x * 2)
+        
+        assert len(q2._changes) == 1
+        assert q2._changes[0][0] == "extend"
+
+
+class TestQTransform:
+    """Tests for Q.transform() method."""
+
+    def test_transform_dict(self):
+        """Should transform rows with dict output."""
+        df = pd.DataFrame({"first": ["Alice", "Bob"], "last": ["Smith", "Jones"]})
+        q = Q(df)
+        q2 = q.transform(lambda x: {"full_name": f"{x.first} {x.last}"})
+        
+        assert list(q2.df.columns) == ["full_name"]
+        assert list(q2.df["full_name"]) == ["Alice Smith", "Bob Jones"]
+
+    def test_transform_tuple(self):
+        """Should transform rows with tuple output."""
+        df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
+        q = Q(df)
+        q2 = q.transform(lambda x: (x.x + x.y, x.x * x.y))
+        
+        assert list(q2.df.columns) == ["c0", "c1"]
+        assert list(q2.df["c0"]) == [4, 6]
+
+    def test_transform_tracks_changes(self):
+        """Should track transform in change history."""
+        df = pd.DataFrame({"x": [1]})
+        q = Q(df)
+        q2 = q.transform(lambda x: {"y": x.x * 2})
+        
+        assert len(q2._changes) == 1
+        assert q2._changes[0][0] == "transform"
+
+
+class TestQFilter:
+    """Tests for Q.filter() method."""
+
+    def test_filter_basic(self):
+        """Should filter rows."""
+        df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
+        q = Q(df)
+        q2 = q.filter(lambda x: x.x > 2)
+        
+        assert len(q2) == 3
+        assert list(q2.df["x"]) == [3, 4, 5]
+
+    def test_filter_preserves_columns(self):
+        """Should preserve all columns."""
+        df = pd.DataFrame({"name": ["Alice", "Bob", "Charlie"], "age": [25, 30, 35]})
+        q = Q(df)
+        q2 = q.filter(lambda x: x.age >= 30)
+        
+        assert list(q2.df.columns) == ["name", "age"]
+        assert len(q2) == 2
+
+    def test_filter_exception_handling(self):
+        """Should treat exceptions as False."""
+        df = pd.DataFrame({"value": ["10", "abc", "20"]})
+        q = Q(df)
+        q2 = q.filter(lambda x: int(x.value) > 15)
+        
+        assert len(q2) == 1
+        assert q2.df.iloc[0]["value"] == "20"
+
+    def test_filter_tracks_changes(self):
+        """Should track filter in change history."""
+        df = pd.DataFrame({"x": [1, 2]})
+        q = Q(df)
+        q2 = q.filter(lambda x: x.x > 1)
+        
+        assert len(q2._changes) == 1
+        assert q2._changes[0][0] == "filter"
+
+
+class TestQSortHead:
+    """Tests for Q.sort() and Q.head() methods."""
+
+    def test_sort_ascending(self):
+        """Should sort in ascending order."""
+        df = pd.DataFrame({"x": [3, 1, 2]})
+        q = Q(df)
+        q2 = q.sort("x", ascending=True)
+        
+        assert list(q2.df["x"]) == [1, 2, 3]
+
+    def test_sort_descending(self):
+        """Should sort in descending order (default)."""
+        df = pd.DataFrame({"x": [3, 1, 2]})
+        q = Q(df)
+        q2 = q.sort("x")
+        
+        assert list(q2.df["x"]) == [3, 2, 1]
+
+    def test_head(self):
+        """Should return first n rows."""
+        df = pd.DataFrame({"x": range(10)})
+        q = Q(df)
+        q2 = q.head(3)
+        
+        assert len(q2) == 3
+        assert list(q2.df["x"]) == [0, 1, 2]
+
+    def test_sort_head_chain(self):
+        """Should chain sort and head."""
+        df = pd.DataFrame({"x": [3, 1, 4, 1, 5]})
+        q = Q(df)
+        q2 = q.sort("x", ascending=True).head(3)
+        
+        assert list(q2.df["x"]) == [1, 1, 3]
+
+
+class TestQRefreshReload:
+    """Tests for Q.refresh() and Q.reload() methods."""
+
+    def test_refresh(self):
+        """Should re-apply changes to base."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        q2 = q.extend(y=lambda x: x.x * 2).filter(lambda x: x.y > 2)
+        
+        assert len(q2) == 2
+        
+        # Refresh should give same result
+        q3 = q2.refresh()
+        assert len(q3) == 2
+        assert list(q3.df["y"]) == [4, 6]
+
+    def test_reload_from_file(self, tmp_path):
+        """Should reload from file and re-apply changes."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("price,qty\n10,2\n20,3\n")
+        
+        df = load_csv(str(csv_file))
+        q = Q(df, source_path=str(csv_file))
+        q2 = q.extend(total=lambda x: x.price * x.qty)
+        
+        # Modify file
+        csv_file.write_text("price,qty\n15,4\n25,5\n")
+        
+        # Reload
+        q3 = q2.reload()
+        assert len(q3) == 2
+        assert list(q3.df["total"]) == [60, 125]
+
+    def test_reload_validates_columns(self, tmp_path):
+        """Should raise error if required columns missing."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("price,qty\n10,2\n")
+        
+        df = load_csv(str(csv_file))
+        q = Q(df, source_path=str(csv_file))
+        
+        # Remove a column
+        csv_file.write_text("price\n10\n")
+        
+        with pytest.raises(ValueError, match="required columns missing"):
+            q.reload()
+
+    def test_reload_without_source_raises(self):
+        """Should raise error if no source path."""
+        df = pd.DataFrame({"x": [1, 2]})
+        q = Q(df)
+        
+        with pytest.raises(ValueError, match="Cannot reload"):
+            q.reload()
+
+
+class TestQRebase:
+    """Tests for Q.rebase() method."""
+
+    def test_rebase_clears_changes(self):
+        """Should clear change history."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        q2 = q.extend(y=lambda x: x.x * 2).filter(lambda x: x.y > 2)
+        
+        assert len(q2._changes) == 2
+        
+        q3 = q2.rebase()
+        assert len(q3._changes) == 0
+
+    def test_rebase_preserves_state(self):
+        """Should preserve current DataFrame state."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        q2 = q.extend(y=lambda x: x.x * 2).filter(lambda x: x.y > 2)
+        q3 = q2.rebase()
+        
+        assert len(q3) == len(q2)
+        assert list(q3.df.columns) == list(q2.df.columns)
+        assert list(q3.df["y"]) == list(q2.df["y"])
+
+
+class TestQAggregations:
+    """Tests for Q aggregation methods."""
+
+    def test_sum(self):
+        """Should compute sum."""
+        df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
+        q = Q(df)
+        assert q.sum("x") == 15
+
+    def test_mean(self):
+        """Should compute mean."""
+        df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
+        q = Q(df)
+        assert q.mean("x") == 3.0
+
+    def test_median(self):
+        """Should compute median."""
+        df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
+        q = Q(df)
+        assert q.median("x") == 3.0
+
+    def test_min_max(self):
+        """Should compute min and max."""
+        df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
+        q = Q(df)
+        assert q.min("x") == 1
+        assert q.max("x") == 5
+
+    def test_count(self):
+        """Should count rows or non-null values."""
+        df = pd.DataFrame({"x": [1, 2, None, 4, 5]})
+        q = Q(df)
+        assert q.count() == 5
+        assert q.count("x") == 4
+
+    def test_unique_nunique(self):
+        """Should get unique values."""
+        df = pd.DataFrame({"x": [1, 2, 2, 3, 3, 3]})
+        q = Q(df)
+        assert q.nunique("x") == 3
+        assert set(q.unique("x")) == {1, 2, 3}
+
+
+class TestQHideShowCols:
+    """Tests for Q.hide_cols() and Q.show_cols() methods."""
+
+    def test_hide_cols(self):
+        """Should hide columns from display."""
+        df = pd.DataFrame({"a": [1], "b": [2], "c": [3]})
+        q = Q(df)
+        q2 = q.hide_cols("b")
+        
+        # Column exists in data
+        assert "b" in q2.df.columns
+        
+        # But not in display
+        display = str(q2)
+        assert "a" in display
+        assert "c" in display
+        assert "b" not in display
+
+    def test_show_cols_all(self):
+        """Should show all columns."""
+        df = pd.DataFrame({"a": [1], "b": [2]})
+        q = Q(df).hide_cols("b")
+        q2 = q.show_cols()
+        
+        display = str(q2)
+        assert "a" in display
+        assert "b" in display
+
+    def test_show_cols_specific(self):
+        """Should show only specific columns."""
+        df = pd.DataFrame({"a": [1], "b": [2], "c": [3]})
+        q = Q(df)
+        q2 = q.show_cols("a", "c")
+        
+        display = str(q2)
+        assert "a" in display
+        assert "c" in display
+        assert "b" not in display
+
+
+class TestQIntegration:
+    """Integration tests for complex scenarios."""
+
+    def test_complex_pipeline(self):
+        """Should handle complex chained operations."""
+        df = pd.DataFrame({
+            "name": ["Alice", "Bob", "Charlie", "Diana"],
+            "age": [25, 30, 35, 28],
+            "salary": [50000, 60000, 70000, 55000]
+        })
+        q = Q(df)
+        
+        result = (q
+                  .extend(monthly=lambda x: x.salary / 12)
+                  .filter(lambda x: x.age >= 28)
+                  .sort("monthly", ascending=False)
+                  .head(2))
+        
+        assert len(result) == 2
+        assert result.df.iloc[0]["name"] == "Charlie"
+
+    def test_change_history_preserved(self):
+        """Should preserve complete change history."""
+        df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
+        q = Q(df)
+        
+        q2 = (q
+              .extend(y=lambda x: x.x * 2)
+              .filter(lambda x: x.y > 4)
+              .extend(z=lambda x: x.y + 10)
+              .sort("z")
+              .head(2))
+        
+        assert len(q2._changes) == 5
+        change_types = [c[0] for c in q2._changes]
+        assert change_types == ["extend", "filter", "extend", "sort", "head"]
