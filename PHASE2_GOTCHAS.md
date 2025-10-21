@@ -15,13 +15,13 @@ Phase 2 introduces **Q-to-Q references** in operations like `merge()`, `join()`,
 
 The following design decisions have been made for Phase 2:
 
-1. **Deep Copy on Multi-Q Operations** - Use `copy.deepcopy(other)` to store full Q with history
+1. **Deep Copy by Default with Optional Reference Mode** - Use `copy.deepcopy(other)` by default, optional `deep_copy=False` for performance
 2. **Explicit Conflict Resolution** - Require user-provided `resolve` parameter for column conflicts
-3. **Tree-Based History** - Change history becomes a tree, `refresh()` does recursive traversal
+3. **Tree-Based History** - Change history becomes a tree, `refresh()` and `reload()` do recursive traversal
 4. **Reproducibility Tracking** - Add `q.reproducible` flag that propagates through operations
 5. **Follow Pandas Conventions** - Use pandas behavior for `union()`, `merge()`, etc.
 6. **Row-by-Row Conflict Resolution** - Use `apply()` for conflict lambda application
-7. **Correctness Over Performance** - Prioritize reproducibility and correctness
+7. **Correctness Over Performance** - Prioritize reproducibility and correctness by default, with performance options
 
 ---
 
@@ -118,12 +118,14 @@ q3 = q1.merge(q2, on='id')
 **FINAL DECISION: Explicit Resolution Required**
 
 ```python
-def merge(self, other, on, how='inner', resolve=None):
+def merge(self, other, on, how='inner', resolve=None, deep_copy=True):
     """Merge two Q objects.
     
     Args:
         resolve: Dict mapping conflicting column names to resolution lambdas.
                  Lambda signature: lambda left_val, right_val: result_val
+        deep_copy: If True (default), stores a deep copy for reproducibility.
+                   If False, stores reference and marks as non-reproducible.
                  
     Raises:
         ValueError: If column conflicts exist without complete resolution
@@ -867,31 +869,34 @@ q.merge(other, left_on=['a', 'b'], right_on=['x', 'y'])  # Different names
 
 Implement in this order to validate architecture early and minimize risk:
 
-1. ✅ **`concat(other)`** - Simplest, tests reference architecture
+1. ✅ **`concat(other, deep_copy=True)`** - Simplest, tests deep copy architecture
 2. ✅ **Self-concat test** - Validates circular reference handling  
-3. ✅ **`merge(other, left_on, right_on, how, suffixes)`** - Core functionality
-4. ✅ **Column conflict detection** - Validate suffixes requirement
-5. ✅ **Decide and document reload() behavior** - Shallow reload with clear docs
-6. ✅ **`join(other, on, how)`** - Wrapper around merge
-7. ✅ **Set operations** - `union()`, `intersect()`, `difference()` with deterministic ordering
+3. ✅ **`merge(other, on, how, resolve, deep_copy=True)`** - Core functionality with conflict resolution
+4. ✅ **Column conflict detection** - Validate resolve parameter requirement
+5. ✅ **Deep reload() implementation** - Recursive reload parallel to refresh()
+6. ✅ **Self-merge test** - Deep copy of self to avoid circular references
+7. ✅ **`join(other, on, how, deep_copy=True)`** - Wrapper around merge
+8. ✅ **Set operations** - `union()`, `intersect()`, `difference()` with deterministic ordering
 
 ### Required for Phase 2.0 Release
 
 **Must implement:**
-- [ ] Explicit column conflict handling (require suffixes)
+- [ ] Explicit column conflict handling (require resolve parameter)
 - [ ] Deterministic ordering for set operations
-- [ ] Comprehensive documentation of Q reference contract
-- [ ] Self-join tests
+- [ ] Comprehensive documentation of Q deep copy contract
+- [ ] Self-join tests with deep copy of self
+- [ ] Deep reload() implementation (recursive)
 
 **Should implement:**
-- [ ] Clear reload() behavior documentation
+- [ ] Deep reload() behavior documentation (recursive through tree)
 - [ ] Memory usage warnings in concat docs
 - [ ] Examples of all gotchas in README
+- [ ] `deep_copy` parameter in all multi-Q operations
 
 **Can defer to Phase 2.1:**
-- [ ] Mutation detection (version IDs)
+- [ ] Mutation detection (version IDs) - not needed with deep copy default
 - [ ] Auto-rebase heuristics
-- [ ] Deep reload option
+- [ ] Performance optimizations
 
 ---
 
@@ -909,9 +914,9 @@ reproducibility but requires understanding these behaviors:
 
 **The Contract:**
 1. User freedom: Continue using Q objects after multi-Q operations (deep copy protects you)
-2. `reload()` only reloads this Q's source, not referenced Qs' sources
+2. `reload()` recursively reloads entire tree from disk (this Q AND all referenced Qs' sources)
 3. Column conflicts require explicit `resolve` parameter with lambdas
-4. Long operation chains accumulate memory - use `rebase()` to flatten
+4. Long operation chains accumulate memory - use `rebase()` or `deep_copy=False` to manage
 5. Check `q.reproducible` to verify if pipeline is deterministic
 
 **Example:**
@@ -935,10 +940,10 @@ q3 = q3.rebase()  # ✅ Flattens history, drops deep copies
 ```
 
 **Must Add to Docstrings:**
-- Every multi-Q method documents deep copy behavior
+- Every multi-Q method documents deep copy behavior and `deep_copy` parameter
 - Every multi-Q method includes `resolve` parameter explanation
 - Every multi-Q method documents `reproducible` flag impact
-- `reload()` clearly explains shallow behavior
+- `reload()` clearly explains deep/recursive behavior (reloads entire tree)
 - All methods include **Idempotent: Yes/No** section
 
 ---
@@ -959,9 +964,11 @@ q3 = q3.rebase()  # ✅ Flattens history, drops deep copies
 - [ ] Merge on multiple columns
 - [ ] Merge with different column names (left_on/right_on)
 - [ ] All join types: inner, left, right, outer
-- [ ] Self-merge (employee-manager)
-- [ ] Column conflicts with suffixes
-- [ ] Column conflicts without suffixes (should error)
+- [ ] Self-merge (employee-manager) with deep copy of self
+- [ ] Column conflicts with resolve parameter
+- [ ] Column conflicts without resolve (should error)
+- [ ] Merge with deep_copy=True (default)
+- [ ] Merge with deep_copy=False (sets reproducible=False)
 - [ ] Merge then filter then refresh
 - [ ] Merge after rename
 
