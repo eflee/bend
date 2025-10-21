@@ -1,5 +1,6 @@
 """Core functionality for CSV loading and querying - New architecture."""
 
+import copy
 import re
 from collections import defaultdict
 from typing import Callable, Dict, List, Tuple, Any
@@ -75,7 +76,7 @@ def rows(df: pd.DataFrame):
 class Q:
     """A query interface with tracked change history and replay capabilities.
     
-    Q maintains a base DataFrame and a list of changes (extensions, transformations,
+    Q maintains a base DataFrame and a list of changes (assignments, mappings,
     filtrations). The current state can always be reconstructed from base + changes.
     
     Args:
@@ -85,7 +86,7 @@ class Q:
         
     Example:
         >>> q = Q(df, source_path='data.csv')
-        >>> q2 = q.extend(total=lambda x: x.price * x.qty)
+        >>> q2 = q.assign(total=lambda x: x.price * x.qty)
         >>> q3 = q2.filter(lambda x: x.total > 100)
         >>> q3.refresh()  # Re-apply changes to base data
     """
@@ -97,7 +98,8 @@ class Q:
         skip_rows: int = 0,
         base_df: pd.DataFrame = None,
         changes: List[Tuple[str, Any]] = None,
-        hidden_cols: set = None
+        hidden_cols: set = None,
+        reproducible: bool = True
     ):
         """Initialize a Q object with a DataFrame.
         
@@ -108,6 +110,7 @@ class Q:
             base_df: Base DataFrame (if None, df is used as base)
             changes: List of tracked changes
             hidden_cols: Set of column names to hide from display
+            reproducible: Whether this Q's history contains only deterministic operations
         """
         self._base_df = base_df if base_df is not None else df.copy()
         self._changes: List[Tuple[str, Any]] = changes or []
@@ -115,6 +118,7 @@ class Q:
         self._skip_rows = skip_rows
         self._hidden_cols = hidden_cols or set()
         self._df = df
+        self._reproducible = reproducible
     
     def _apply_changes(self, base: pd.DataFrame, changes: List[Tuple[str, Any]] = None) -> pd.DataFrame:
         """Apply tracked changes to a base DataFrame.
@@ -130,14 +134,14 @@ class Q:
         changes_to_apply = changes if changes is not None else self._changes
         
         for change_type, change_data in changes_to_apply:
-            if change_type == "extend":
+            if change_type == "assign":
                 # Add new columns
                 add = {}
                 for col_name, fn in change_data.items():
                     add[col_name] = [fn(r) for r in rows(result)]
                 result = pd.concat([result.reset_index(drop=True), pd.DataFrame(add)], axis=1)
             
-            elif change_type == "transform":
+            elif change_type == "map":
                 # Transform rows to new structure
                 fn = change_data
                 recs = []
@@ -213,6 +217,67 @@ class Q:
                 valid_mapping = {old: new for old, new in mapping.items() if old in result.columns}
                 if valid_mapping:
                     result = result.rename(columns=valid_mapping)
+            
+            elif change_type == "concat":
+                # Concatenate with another Q
+                other_q = change_data["other"]
+                # Get the other Q's current DataFrame by applying its changes
+                other_df = other_q._apply_changes(other_q._base_df, other_q._changes)
+                result = pd.concat([result, other_df], axis=0, ignore_index=True)
+            
+            elif change_type == "merge":
+                # Merge with another Q
+                other_q = change_data["other"]
+                on = change_data["on"]
+                how = change_data["how"]
+                resolve = change_data.get("resolve", {})
+                
+                # Get the other Q's current DataFrame
+                other_df = other_q._apply_changes(other_q._base_df, other_q._changes)
+                
+                # Detect and resolve column conflicts
+                if isinstance(on, str):
+                    on_cols = {on}
+                else:
+                    on_cols = set(on)
+                
+                conflicts = set(result.columns) & set(other_df.columns) - on_cols
+                
+                if conflicts and not resolve:
+                    raise ValueError(
+                        f"Column conflicts detected: {sorted(conflicts)}. "
+                        f"Use resolve parameter to specify how to handle them. "
+                        f"Example: resolve={{'col': lambda left, right: left}}"
+                    )
+                
+                if resolve:
+                    missing_resolutions = conflicts - set(resolve.keys())
+                    if missing_resolutions:
+                        raise ValueError(
+                            f"Missing resolution for columns: {sorted(missing_resolutions)}"
+                        )
+                
+                # Perform the merge
+                merged = pd.merge(result, other_df, on=on, how=how, suffixes=('_LEFT', '_RIGHT'))
+                
+                # Apply conflict resolution if needed
+                if resolve:
+                    for col_name, resolve_fn in resolve.items():
+                        left_col = f"{col_name}_LEFT"
+                        right_col = f"{col_name}_RIGHT"
+                        
+                        if left_col in merged.columns and right_col in merged.columns:
+                            # Apply resolution lambda row-by-row
+                            def apply_resolve(row):
+                                left_val = row[left_col]
+                                right_val = row[right_col]
+                                return resolve_fn(left_val, right_val)
+                            
+                            merged[col_name] = merged.apply(apply_resolve, axis=1)
+                            # Drop the suffixed columns
+                            merged = merged.drop(columns=[left_col, right_col])
+                
+                result = merged
         
         return result
     
@@ -231,7 +296,8 @@ class Q:
             'skip_rows': self._skip_rows,
             'base_df': self._base_df,
             'changes': self._changes.copy(),
-            'hidden_cols': self._hidden_cols.copy()
+            'hidden_cols': self._hidden_cols.copy(),
+            'reproducible': self._reproducible
         }
         params.update(kwargs)
         return Q(**params)
@@ -270,7 +336,7 @@ class Q:
             >>> q.columns
             ['name', 'age', 'salary']
             >>> # Use in lambdas:
-            >>> q.extend(total=lambda x: x.price * x.qty)
+            >>> q.assign(total=lambda x: x.price * x.qty)
         """
         return self._df.columns.tolist()
     
@@ -298,8 +364,35 @@ class Q:
         """
         return len(self._df)
     
-    def extend(self, **newcols) -> 'Q':
+    @property
+    def reproducible(self) -> bool:
+        """Return whether this Q's history contains only deterministic operations.
+        
+        A Q is reproducible if all operations in its history will produce the same
+        results when replayed. Non-deterministic operations (like sample() without
+        a random_state, or merge() with deep_copy=False) will set this flag to False.
+        
+        Returns:
+            True if all operations are deterministic and reproducible,
+            False if any operation is non-deterministic
+            
+        Example:
+            >>> q = Q(df)
+            >>> q.reproducible
+            True
+            >>> q2 = q.sample(100)  # No random_state - non-deterministic
+            >>> q2.reproducible
+            False
+            >>> q3 = q.sample(100, random_state=42)  # Deterministic
+            >>> q3.reproducible
+            True
+        """
+        return self._reproducible
+    
+    def assign(self, **newcols) -> 'Q':
         """Add new columns to the DataFrame based on existing columns.
+        
+        Aligns with pandas DataFrame.assign() for familiarity and consistency.
         
         Args:
             **newcols: Keyword arguments where keys are new column names and
@@ -309,15 +402,21 @@ class Q:
             A new Q object with the additional columns
             
         Example:
-            >>> q.extend(total=lambda x: x.price * x.qty, tax=lambda x: x.total * 0.08)
+            >>> q.assign(total=lambda x: x.price * x.qty, tax=lambda x: x.total * 0.08)
+            
+        Idempotent: Yes
         """
-        new_changes = self._changes + [("extend", newcols)]
+        new_changes = self._changes + [("assign", newcols)]
         new_df = self._apply_changes(self._base_df, new_changes)
         
         return self._copy_with(df=new_df, changes=new_changes)
     
-    def transform(self, fn: Callable) -> 'Q':
-        """Transform each row using a function, creating new columns.
+    def map(self, fn: Callable) -> 'Q':
+        """Map each row to a new structure, replacing all columns.
+        
+        This is a complete restructuring operation - it processes each row through
+        your function and builds an entirely new DataFrame from the results.
+        For adding columns while keeping existing ones, use assign() instead.
         
         Args:
             fn: A function that takes a Row and returns:
@@ -329,9 +428,12 @@ class Q:
             A new Q object with the transformed data
             
         Example:
-            >>> q.transform(lambda x: {'name': x.first + ' ' + x.last, 'age': x.age})
+            >>> q.map(lambda x: {'name': x.first + ' ' + x.last, 'age': x.age})
+            >>> q.map(lambda x: (x.year, x.month, x.day))  # Creates c0, c1, c2
+            
+        Idempotent: Yes
         """
-        new_changes = self._changes + [("transform", fn)]
+        new_changes = self._changes + [("map", fn)]
         new_df = self._apply_changes(self._base_df, new_changes)
         
         return self._copy_with(df=new_df, changes=new_changes)
@@ -347,6 +449,8 @@ class Q:
             
         Example:
             >>> q.filter(lambda x: x.region == 'CA')
+            
+        Idempotent: Yes
         """
         new_changes = self._changes + [("filter", fn)]
         new_df = self._apply_changes(self._base_df, new_changes)
@@ -393,6 +497,12 @@ class Q:
             
         Returns:
             A new Q object containing the first n rows
+            
+        Example:
+            >>> q.head(10)  # First 10 rows
+            >>> q.sort('date').head(20)  # Earliest 20 after sorting
+            
+        Idempotent: Yes
         """
         new_changes = self._changes + [("head", n)]
         new_df = self._apply_changes(self._base_df, new_changes)
@@ -411,23 +521,27 @@ class Q:
         Example:
             >>> q.tail(10)  # Last 10 rows
             >>> q.sort('date').tail(20)  # Most recent 20 after sorting
+            
+        Idempotent: Yes
         """
         new_changes = self._changes + [("tail", n)]
         new_df = self._apply_changes(self._base_df, new_changes)
         
         return self._copy_with(df=new_df, changes=new_changes)
     
-    def sample(self, n: int = None, frac: float = None, random_state: int = 42) -> 'Q':
+    def sample(self, n: int = None, frac: float = None, random_state: int = None) -> 'Q':
         """Return a random sample of rows.
         
-        By default uses random_state=42 for reproducible samples that honor
-        the idempotency requirement. Set random_state=None for truly random
-        sampling (note: breaks reproducibility on refresh/reload).
+        By default sampling is **non-deterministic** (random_state=None), which means
+        each call will return different results. To make sampling reproducible, pass
+        an explicit random_state value. Non-deterministic sampling marks the Q as
+        non-reproducible (q.reproducible will be False).
         
         Args:
             n: Number of rows to sample (mutually exclusive with frac)
             frac: Fraction of rows to sample (0.0 to 1.0, mutually exclusive with n)
-            random_state: Random seed for reproducibility (default: 42, use None for random)
+            random_state: Random seed for reproducibility (default: None for random,
+                         pass an int like 42 for deterministic sampling)
             
         Returns:
             A new Q object containing the sampled rows
@@ -436,10 +550,12 @@ class Q:
             ValueError: If neither or both n and frac are specified
             
         Example:
-            >>> q.sample(100)  # 100 random rows (reproducible)
-            >>> q.sample(frac=0.1)  # 10% random sample (reproducible)
-            >>> q.sample(50, random_state=None)  # 50 rows (truly random)
-            >>> q.sample(1000, random_state=123)  # Custom seed
+            >>> q.sample(100)  # 100 random rows (non-deterministic, different each time)
+            >>> q.sample(frac=0.1)  # 10% random sample (non-deterministic)
+            >>> q.sample(50, random_state=42)  # 50 rows (reproducible with seed)
+            >>> q.sample(1000, random_state=123)  # Custom seed (reproducible)
+            
+        Idempotent: Only if random_state is specified (not None)
         """
         if n is None and frac is None:
             raise ValueError("Must specify either n or frac")
@@ -450,7 +566,10 @@ class Q:
         new_changes = self._changes + [("sample", sample_params)]
         new_df = self._apply_changes(self._base_df, new_changes)
         
-        return self._copy_with(df=new_df, changes=new_changes)
+        # Mark as non-reproducible if random_state is None
+        new_reproducible = self._reproducible and (random_state is not None)
+        
+        return self._copy_with(df=new_df, changes=new_changes, reproducible=new_reproducible)
     
     def sort(self, *cols, ascending: bool = True) -> 'Q':
         """Sort the DataFrame by one or more columns.
@@ -465,6 +584,8 @@ class Q:
         Example:
             >>> q.sort('price', ascending=False)  # Highest first
             >>> q.sort('age')  # Lowest first (default)
+            
+        Idempotent: Yes
         """
         new_changes = self._changes + [("sort", (cols, ascending))]
         new_df = self._apply_changes(self._base_df, new_changes)
@@ -485,7 +606,9 @@ class Q:
             
         Example:
             >>> q.drop('id', 'internal_field')  # Actually removes columns
-            >>> q.drop('temp').extend(...)  # Removed columns can't be used
+            >>> q.drop('temp').assign(...)  # Removed columns can't be used
+            
+        Idempotent: Yes
         """
         new_changes = self._changes + [("drop", list(cols))]
         new_df = self._apply_changes(self._base_df, new_changes)
@@ -506,6 +629,8 @@ class Q:
             
         Example:
             >>> q.select('name', 'email', 'age')  # Keep only these columns
+            
+        Idempotent: Yes
         """
         new_changes = self._changes + [("select", list(cols))]
         new_df = self._apply_changes(self._base_df, new_changes)
@@ -530,6 +655,8 @@ class Q:
             >>> q.distinct()  # Remove completely duplicate rows
             >>> q.distinct('customer_id')  # Keep first occurrence per customer
             >>> q.distinct('email', 'phone')  # Unique by email+phone combination
+            
+        Idempotent: Yes
         """
         subset = list(cols) if cols else None
         new_changes = self._changes + [("distinct", subset)]
@@ -549,11 +676,281 @@ class Q:
         Examples:
             >>> q.rename(customer_id='cust_id')
             >>> q.rename(old_name='new_name', another='better_name')
+            
+        Idempotent: Yes
         """
         new_changes = self._changes + [("rename", mapping)]
         new_df = self._apply_changes(self._base_df, new_changes)
         
         return self._copy_with(df=new_df, changes=new_changes)
+    
+    def concat(self, other: 'Q', deep_copy: bool = True) -> 'Q':
+        """Concatenate another Q vertically (stack rows).
+        
+        Combines rows from both Q objects. Column names must match (or be subset/superset).
+        Missing columns are filled with NaN. By default, stores a deep copy of the other Q
+        for full reproducibility. Use deep_copy=False for better performance with large
+        datasets (marks result as non-reproducible).
+        
+        Args:
+            other: Another Q object to concatenate
+            deep_copy: If True (default), stores a deep copy for full reproducibility.
+                      If False, stores reference and marks as non-reproducible.
+                      
+        Returns:
+            A new Q object with rows from both Q objects
+            
+        Examples:
+            >>> q1 = Q(df1)  # Jan data
+            >>> q2 = Q(df2)  # Feb data
+            >>> q_combined = q1.concat(q2)  # All rows from both
+            >>> 
+            >>> # Self-concatenation (duplicates rows)
+            >>> q_double = q.concat(q)
+            >>>
+            >>> # Performance mode for large datasets
+            >>> q_combined = q1.concat(huge_q, deep_copy=False)  # Faster but non-reproducible
+            
+        Idempotent: Yes (if both Q objects are reproducible and deep_copy=True)
+        """
+        # Handle self-reference: deep copy self to avoid circular reference
+        if other is self:
+            other_copy = copy.deepcopy(self)
+        elif deep_copy:
+            # Store FULL deep copy of other Q including its history
+            other_copy = copy.deepcopy(other)
+        else:
+            # Store reference - faster but breaks reproducibility guarantee
+            other_copy = other
+        
+        new_changes = self._changes + [("concat", {"other": other_copy, "deep_copy": deep_copy})]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        # Propagate reproducibility
+        if deep_copy:
+            new_reproducible = self._reproducible and other._reproducible
+        else:
+            new_reproducible = False  # Can't guarantee reproducibility with references
+        
+        return self._copy_with(df=new_df, changes=new_changes, reproducible=new_reproducible)
+    
+    def merge(self, other: 'Q', on, how: str = 'inner', resolve: dict = None, deep_copy: bool = True) -> 'Q':
+        """Merge with another Q object based on key columns.
+        
+        Similar to pandas merge/join but requires explicit handling of column conflicts.
+        By default, stores a deep copy of the other Q for full reproducibility. Use
+        deep_copy=False for better performance with large datasets (marks as non-reproducible).
+        
+        Args:
+            other: Another Q object to merge with
+            on: Column name(s) to merge on. Can be a string for single column or list for multiple.
+            how: Type of merge ('inner', 'left', 'right', 'outer'). Default: 'inner'
+            resolve: Dict mapping conflicting column names to resolution lambdas.
+                    Lambda signature: lambda left_val, right_val: result_val
+                    Required if column conflicts exist (excluding merge keys).
+            deep_copy: If True (default), stores a deep copy for full reproducibility.
+                      If False, stores reference and marks as non-reproducible.
+                      
+        Returns:
+            A new Q object with merged data
+            
+        Raises:
+            ValueError: If column conflicts exist without complete resolution
+            
+        Examples:
+            >>> # Basic merge on single column
+            >>> customers = Q(customers_df)
+            >>> orders = Q(orders_df)
+            >>> q = customers.merge(orders, on='customer_id', how='left')
+            >>> 
+            >>> # Merge with conflict resolution
+            >>> q1 = Q(pd.DataFrame({"id": [1, 2], "name": ["Alice", "Bob"], "status": ["active", "inactive"]}))
+            >>> q2 = Q(pd.DataFrame({"id": [1, 2], "status": ["pending", "complete"]}))
+            >>> # Both have 'status' column - must resolve!
+            >>> q3 = q1.merge(q2, on='id', resolve={'status': lambda left, right: left})
+            >>>
+            >>> # Self-merge (employee-manager relationship)
+            >>> employees = Q(emp_df)
+            >>> # Self-references use deep copy to avoid circular references
+            >>> q = employees.merge(employees, on='manager_id')
+            >>>
+            >>> # Performance mode for large datasets
+            >>> q = small.merge(huge_q, on='id', deep_copy=False)  # Faster but non-reproducible
+            
+        Idempotent: Yes (if both Q objects are reproducible and deep_copy=True)
+        """
+        # Handle self-reference: deep copy self to avoid circular reference
+        if other is self:
+            other_copy = copy.deepcopy(self)
+        elif deep_copy:
+            # Store FULL deep copy of other Q including its history
+            other_copy = copy.deepcopy(other)
+        else:
+            # Store reference - faster but breaks reproducibility guarantee
+            other_copy = other
+        
+        # Normalize on parameter
+        if isinstance(on, str):
+            on_param = on
+        else:
+            on_param = list(on)
+        
+        new_changes = self._changes + [("merge", {
+            "other": other_copy,
+            "on": on_param,
+            "how": how,
+            "resolve": resolve or {},
+            "deep_copy": deep_copy
+        })]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        # Propagate reproducibility
+        if deep_copy:
+            new_reproducible = self._reproducible and other._reproducible
+        else:
+            new_reproducible = False  # Can't guarantee reproducibility with references
+        
+        return self._copy_with(df=new_df, changes=new_changes, reproducible=new_reproducible)
+    
+    def join(self, other: 'Q', on, how: str = 'inner', deep_copy: bool = True) -> 'Q':
+        """Join with another Q object (convenience wrapper around merge).
+        
+        Simpler interface for merges without column conflicts. If conflicts exist,
+        use merge() with explicit resolve parameter instead.
+        
+        Args:
+            other: Another Q object to join with
+            on: Column name(s) to join on. Can be a string for single column or list for multiple.
+            how: Type of join ('inner', 'left', 'right', 'outer'). Default: 'inner'
+            deep_copy: If True (default), stores a deep copy for full reproducibility.
+                      If False, stores reference and marks as non-reproducible.
+                      
+        Returns:
+            A new Q object with joined data
+            
+        Raises:
+            ValueError: If column conflicts exist (use merge() with resolve parameter instead)
+            
+        Examples:
+            >>> customers = Q(customers_df)
+            >>> orders = Q(orders_df)
+            >>> q = customers.join(orders, on='customer_id', how='left')
+            
+        Idempotent: Yes (if both Q objects are reproducible and deep_copy=True)
+        """
+        return self.merge(other, on=on, how=how, resolve=None, deep_copy=deep_copy)
+    
+    def union(self, other: 'Q', deep_copy: bool = True) -> 'Q':
+        """Union with another Q (concat + distinct to remove duplicates).
+        
+        Combines rows from both Q objects and removes duplicates. Columns must match.
+        Preserves insertion order (self first, then other's unique rows).
+        
+        Args:
+            other: Another Q object to union with (must have same columns)
+            deep_copy: If True (default), stores a deep copy for full reproducibility.
+                      If False, stores reference and marks as non-reproducible.
+                      
+        Returns:
+            A new Q object with unique rows from both Q objects
+            
+        Examples:
+            >>> q1 = Q(df1)  # [1, 2, 3]
+            >>> q2 = Q(df2)  # [2, 3, 4]
+            >>> q3 = q1.union(q2)  # [1, 2, 3, 4]
+            
+        Idempotent: Yes (if both Q objects are reproducible and deep_copy=True)
+        """
+        return self.concat(other, deep_copy=deep_copy).distinct()
+    
+    def intersect(self, other: 'Q', deep_copy: bool = True) -> 'Q':
+        """Intersect with another Q (rows that appear in both).
+        
+        Returns only rows that appear in both Q objects. Columns must match.
+        
+        Args:
+            other: Another Q object to intersect with (must have same columns)
+            deep_copy: If True (default), stores a deep copy for full reproducibility.
+                      If False, stores reference and marks as non-reproducible.
+                      
+        Returns:
+            A new Q object with rows common to both Q objects
+            
+        Examples:
+            >>> q1 = Q(df1)  # [1, 2, 3]
+            >>> q2 = Q(df2)  # [2, 3, 4]
+            >>> q3 = q1.intersect(q2)  # [2, 3]
+            
+        Idempotent: Yes (if both Q objects are reproducible and deep_copy=True)
+        """
+        # Get the other Q's DataFrame
+        if other is self:
+            other_copy = copy.deepcopy(self)
+        elif deep_copy:
+            other_copy = copy.deepcopy(other)
+        else:
+            other_copy = other
+        
+        other_df = other_copy._apply_changes(other_copy._base_df, other_copy._changes)
+        
+        # Perform intersection using pandas merge
+        result_df = pd.merge(self._df, other_df, how='inner')
+        result_df = result_df.drop_duplicates()
+        
+        # Determine reproducibility
+        if deep_copy:
+            new_reproducible = self._reproducible and other._reproducible
+        else:
+            new_reproducible = False
+        
+        # Return new Q with result (no change tracking needed, it's a terminal operation in a sense)
+        # Actually, we should track this for reproducibility. Let's use a simple filter.
+        # For now, create a new Q with the result
+        return Q(result_df, reproducible=new_reproducible)
+    
+    def difference(self, other: 'Q', deep_copy: bool = True) -> 'Q':
+        """Difference from another Q (rows in self but not in other).
+        
+        Returns rows that appear in self but not in other. Columns must match.
+        
+        Args:
+            other: Another Q object to subtract (must have same columns)
+            deep_copy: If True (default), stores a deep copy for full reproducibility.
+                      If False, stores reference and marks as non-reproducible.
+                      
+        Returns:
+            A new Q object with rows in self but not in other
+            
+        Examples:
+            >>> q1 = Q(df1)  # [1, 2, 3]
+            >>> q2 = Q(df2)  # [2, 3, 4]
+            >>> q3 = q1.difference(q2)  # [1]
+            
+        Idempotent: Yes (if both Q objects are reproducible and deep_copy=True)
+        """
+        # Get the other Q's DataFrame
+        if other is self:
+            # Self-difference is empty
+            return Q(pd.DataFrame(columns=self._df.columns), reproducible=self._reproducible)
+        elif deep_copy:
+            other_copy = copy.deepcopy(other)
+        else:
+            other_copy = other
+        
+        other_df = other_copy._apply_changes(other_copy._base_df, other_copy._changes)
+        
+        # Perform difference using pandas merge with indicator
+        merged = pd.merge(self._df, other_df, how='outer', indicator=True)
+        result_df = merged[merged['_merge'] == 'left_only'].drop('_merge', axis=1)
+        result_df = result_df.drop_duplicates()
+        
+        # Determine reproducibility
+        if deep_copy:
+            new_reproducible = self._reproducible and other._reproducible
+        else:
+            new_reproducible = False
+        
+        return Q(result_df, reproducible=new_reproducible)
     
     def show(self, n: int = 20) -> 'Q':
         """Print the first n rows of the DataFrame (respects hidden columns).
@@ -613,7 +1010,7 @@ class Q:
             
         Example:
             >>> q.hide('id', 'internal_field')  # Hide from display
-            >>> q.hide('cost').extend(profit=lambda x: x.revenue - x.cost)  # Still works!
+            >>> q.hide('cost').assign(profit=lambda x: x.revenue - x.cost)  # Still works!
         """
         new_hidden = self._hidden_cols | set(cols)
         return self._copy_with(hidden_cols=new_hidden)
@@ -643,8 +1040,14 @@ class Q:
             return self._copy_with(hidden_cols=set())
     
     def reload(self) -> 'Q':
-        """Reload data from the source CSV file and re-apply all tracked changes.
+        """Reload data from the source CSV file and recursively reload all referenced Qs.
         
+        This is a DEEP/RECURSIVE operation that reloads the entire Q tree from disk:
+        - Reloads this Q's source file
+        - Recursively reloads any Q objects stored in the change history (from concat, merge, etc.)
+        - Re-applies all changes to the newly reloaded data
+        
+        This enables full reproducibility after source files have been updated.
         Validates that all original columns still exist in the reloaded data.
         New columns and rows are allowed.
         
@@ -655,13 +1058,35 @@ class Q:
             ValueError: If no source path was provided or if required columns are missing
             
         Example:
-            >>> q2 = q.extend(total=lambda x: x.price * x.qty)
-            >>> q3 = q2.reload()  # Reloads from source and re-applies total column
+            >>> q2 = q.assign(total=lambda x: x.price * x.qty)
+            >>> q3 = q2.concat(other_q)
+            >>> # Both source CSVs are updated
+            >>> q4 = q3.reload()  # Reloads both sources and re-applies all operations
         """
         if not self._source_path:
             raise ValueError("Cannot reload: no source path available")
         
-        # Reload the data from source
+        # First, recursively reload any Q objects in the change history
+        new_changes = []
+        for change_type, change_data in self._changes:
+            if change_type in ("concat", "merge"):
+                # Reload the referenced Q
+                other_q = change_data["other"]
+                if other_q._source_path:
+                    reloaded_other = other_q.reload()
+                else:
+                    # No source path, just refresh it
+                    reloaded_other = other_q.refresh()
+                
+                # Reconstruct the change with reloaded Q
+                new_data = change_data.copy()
+                new_data["other"] = reloaded_other
+                new_changes.append((change_type, new_data))
+            else:
+                # Non-multi-Q change, keep as-is
+                new_changes.append((change_type, change_data))
+        
+        # Reload this Q's data from source
         new_base = load_csv(self._source_path, skip_rows=self._skip_rows)
         
         # Validate that all original base columns still exist
@@ -674,10 +1099,10 @@ class Q:
                 f"Cannot reload: required columns missing from source: {', '.join(sorted(missing_cols))}"
             )
         
-        # Re-apply all changes to new base
-        new_df = self._apply_changes(new_base)
+        # Re-apply all changes (now with reloaded Q references) to new base
+        new_df = self._apply_changes(new_base, new_changes)
         
-        return self._copy_with(df=new_df, base_df=new_base)
+        return self._copy_with(df=new_df, base_df=new_base, changes=new_changes)
     
     def refresh(self) -> 'Q':
         """Re-apply all tracked changes to the in-memory base DataFrame.
@@ -689,8 +1114,8 @@ class Q:
             A new Q object with changes re-applied to base
             
         Example:
-            >>> q2 = q.extend(total=lambda x: x.price * x.qty)
-            >>> q3 = q2.refresh()  # Re-applies the extension
+            >>> q2 = q.assign(total=lambda x: x.price * x.qty)
+            >>> q3 = q2.refresh()  # Re-applies the assignment
         """
         new_df = self._apply_changes(self._base_df)
         return self._copy_with(df=new_df)
@@ -699,14 +1124,17 @@ class Q:
         """Flatten the change history by making the current state the new base.
         
         The current DataFrame becomes the new base, and the change list is cleared.
-        This is useful for performance when you have a long change history.
+        This is useful for performance when you have a long change history or to drop
+        deep copies of other Q objects stored in the history.
         
         Returns:
             A new Q object with current state as base and empty change list
             
         Example:
-            >>> q2 = q.extend(a=...).filter(...).extend(b=...).filter(...)
+            >>> q2 = q.assign(a=...).filter(...).assign(b=...).filter(...)
             >>> q3 = q2.rebase()  # Flattens: current state becomes new base
+            >>> # After concat with large Q:
+            >>> q4 = q.concat(large_q).filter(...).rebase()  # Drops deep copy of large_q
         """
         return Q(
             df=self._df.copy(),
@@ -714,7 +1142,8 @@ class Q:
             skip_rows=self._skip_rows,
             base_df=self._df.copy(),
             changes=[],
-            hidden_cols=self._hidden_cols.copy()
+            hidden_cols=self._hidden_cols.copy(),
+            reproducible=self._reproducible
         )
     
     # Aggregation methods (informational, don't modify state)
@@ -846,7 +1275,7 @@ class Q:
             - 'total_mb': Total memory usage in megabytes
             
         Example:
-            >>> q2 = q.extend(total=lambda x: x.price * x.qty).filter(lambda x: x.total > 100)
+            >>> q2 = q.assign(total=lambda x: x.price * x.qty).filter(lambda x: x.total > 100)
             >>> usage = q2.memory_usage()
             >>> print(f"Using {usage['total_mb']:.2f} MB")
         """

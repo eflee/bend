@@ -44,7 +44,7 @@ def main():
             "\n"
             "Examples:\n"
             "  q.columns, q.rows  # discover shape\n"
-            "  q.extend(total=lambda x: x.price * x.qty)  # add computed columns\n"
+            "  q.assign(total=lambda x: x.price * x.qty)  # add computed columns\n"
             "  q.filter(lambda x: x.region == 'CA')  # filter rows\n"
             "  q.to_df()  # get DataFrame copy for pandas operations\n"
             "  for row in q: print(row.name)  # iterate over rows\n"
@@ -69,7 +69,7 @@ def main():
             "\n"
             "Examples:\n"
             "  q.columns, q.rows  # discover shape\n"
-            "  q.extend(total=lambda x: x.price * x.qty)  # add computed columns\n"
+            "  q.assign(total=lambda x: x.price * x.qty)  # add computed columns\n"
             "  q.filter(lambda x: x.region == 'CA')  # filter rows\n"
         )
     

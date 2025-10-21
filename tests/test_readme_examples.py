@@ -35,11 +35,11 @@ class TestReadmeExamples:
         q = Q(df)
         
         # Single column
-        q2 = q.extend(total=lambda x: x.price * x.qty)
+        q2 = q.assign(total=lambda x: x.price * x.qty)
         assert list(q2.to_df()['total']) == [20, 60]
         
         # Multiple columns (referencing original columns)
-        q3 = q.extend(
+        q3 = q.assign(
             total=lambda x: x.price * x.qty,
             discount=lambda x: x.price * 0.1
         )
@@ -48,9 +48,9 @@ class TestReadmeExamples:
         
         # Chain extensions (can reference previous extensions)
         q4 = (q
-            .extend(revenue=lambda x: x.price * x.qty)
-            .extend(cost=lambda x: x.revenue * 0.6)
-            .extend(profit=lambda x: x.revenue - x.cost))
+            .assign(revenue=lambda x: x.price * x.qty)
+            .assign(cost=lambda x: x.revenue * 0.6)
+            .assign(profit=lambda x: x.revenue - x.cost))
         assert 'profit' in q4.to_df().columns
         assert abs(q4.to_df().iloc[0]['profit'] - 8.0) < 0.01  # 20 * 0.4
 
@@ -72,7 +72,7 @@ class TestReadmeExamples:
         assert len(west_adults) == 2
         
         # Computed column filters
-        q2 = q.extend(total=lambda x: x.purchase_amount).filter(lambda x: x.total > 1000)
+        q2 = q.assign(total=lambda x: x.purchase_amount).filter(lambda x: x.total > 1000)
         assert len(q2) == 2
 
     def test_sorting_and_limiting(self):
@@ -92,7 +92,7 @@ class TestReadmeExamples:
         asc = q.sort('revenue', ascending=True)
         assert asc.to_df().iloc[0]['revenue'] == 100
 
-    def test_transform_examples(self):
+    def test_map_examples(self):
         """Transform examples from README."""
         df = pd.DataFrame({
             'first': ['Alice', 'Bob'],
@@ -102,7 +102,7 @@ class TestReadmeExamples:
         q = Q(df)
         
         # Combine names
-        q2 = q.transform(lambda x: {
+        q2 = q.map(lambda x: {
             'full_name': f"{x.first} {x.last}",
             'email': x.email
         })
@@ -136,7 +136,7 @@ class TestReadmeExamples:
         
         df = load_csv(str(csv_file))
         q = Q(df, source_path=str(csv_file))
-        q2 = q.extend(commission=lambda x: x.sales * 0.15)
+        q2 = q.assign(commission=lambda x: x.sales * 0.15)
         
         # Update file
         csv_file.write_text("sales,units\n150,6\n250,12\n")
@@ -172,7 +172,7 @@ class TestReadmeExamples:
         assert 'cost' in display
         
         # Hidden columns work in calculations
-        q4 = q.hide('cost').extend(profit=lambda x: x.revenue - x.cost)
+        q4 = q.hide('cost').assign(profit=lambda x: x.revenue - x.cost)
         assert 'profit' in q4.to_df().columns
         assert 'cost' not in str(q4)
 
@@ -189,9 +189,9 @@ class TestReadmeExamples:
         q = Q(df)
         
         result = (q
-            .extend(total=lambda x: x.price * x.quantity)
-            .extend(discount=lambda x: x.total * x.discount_pct)
-            .extend(final=lambda x: x.total - x.discount)
+            .assign(total=lambda x: x.price * x.quantity)
+            .assign(discount=lambda x: x.total * x.discount_pct)
+            .assign(final=lambda x: x.total - x.discount)
             .filter(lambda x: x.date.startswith('2024'))
             .filter(lambda x: x.status == 'completed')
             .hide('internal_id')
@@ -208,11 +208,11 @@ class TestReadmeExamples:
         q = Q(df)
         
         q2 = (q
-            .extend(a=lambda x: x.x * 2)
+            .assign(a=lambda x: x.x * 2)
             .filter(lambda x: x.a > 4)
-            .extend(b=lambda x: x.a + 5)
+            .assign(b=lambda x: x.a + 5)
             .filter(lambda x: x.b < 20)
-            .extend(c=lambda x: x.b * 2))
+            .assign(c=lambda x: x.b * 2))
         
         assert len(q2._changes) == 5
         
@@ -222,7 +222,7 @@ class TestReadmeExamples:
         assert len(q3.to_df()) == len(q2.to_df())
         
         # Continue building
-        q4 = q3.extend(d=lambda x: x.c / 2)
+        q4 = q3.assign(d=lambda x: x.c / 2)
         assert len(q4._changes) == 1
 
     def test_data_quality_checks(self):
@@ -261,7 +261,7 @@ class TestReadmeExamples:
             .filter(lambda x: not x.email.endswith('@test.com'))
             .filter(lambda x: len(x.date.split('-')) == 3)
             .filter(lambda x: x.amount > 0)
-            .extend(region_clean=lambda x: x.region.strip().upper()))
+            .assign(region_clean=lambda x: x.region.strip().upper()))
         
         assert len(clean) == 1  # Only one row passes all filters
         assert clean.to_df().iloc[0]['email'] == 'alice@example.com'
@@ -298,14 +298,14 @@ class TestReadmeExamples:
         q = Q(df)
         
         q2 = (q
-            .extend(margin=lambda x: (x.price - x.cost) / x.price)
+            .assign(margin=lambda x: (x.price - x.cost) / x.price)
             .filter(lambda x: x.margin > 0.2)
-            .extend(profit=lambda x: x.margin * x.revenue)
+            .assign(profit=lambda x: x.margin * x.revenue)
             .sort('profit')
             .head(50))
         
         change_types = [c[0] for c in q2._changes]
-        assert change_types == ['extend', 'filter', 'extend', 'sort', 'head']
+        assert change_types == ['assign', 'filter', 'assign', 'sort', 'head']
 
 
 class TestEdgeCases:
@@ -323,7 +323,7 @@ class TestEdgeCases:
         df = pd.DataFrame({'x': [1]})
         q = Q(df)
         assert len(q) == 1
-        q2 = q.extend(y=lambda x: x.x * 2)
+        q2 = q.assign(y=lambda x: x.x * 2)
         assert q2.to_df().iloc[0]['y'] == 2
 
     def test_many_columns(self):
@@ -346,19 +346,19 @@ class TestEdgeCases:
         q2 = q.head(100)
         assert len(q2) == 2
 
-    def test_transform_to_scalar(self):
+    def test_map_to_scalar(self):
         """Transform can return scalar values."""
         df = pd.DataFrame({'x': [1, 2, 3]})
         q = Q(df)
-        q2 = q.transform(lambda x: x.x * 2)
+        q2 = q.map(lambda x: x.x * 2)
         assert list(q2.to_df().columns) == ['value']
         assert list(q2.to_df()['value']) == [2, 4, 6]
 
-    def test_extend_chaining_references(self):
+    def test_assign_chaining_references(self):
         """Extended columns can reference previous extensions via chaining."""
         df = pd.DataFrame({'x': [1, 2]})
         q = Q(df)
-        q2 = q.extend(y=lambda x: x.x * 2).extend(z=lambda x: x.y + 10)
+        q2 = q.assign(y=lambda x: x.x * 2).assign(z=lambda x: x.y + 10)
         assert list(q2.to_df()['z']) == [12, 14]
 
     def test_sort_empty_cols(self):
@@ -420,7 +420,7 @@ class TestEdgeCases:
         """groupby should reset change history (terminal operation)."""
         df = pd.DataFrame({'cat': ['A', 'B'], 'val': [1, 2]})
         q = Q(df)
-        q2 = q.extend(doubled=lambda x: x.val * 2)
+        q2 = q.assign(doubled=lambda x: x.val * 2)
         assert len(q2._changes) == 1
         
         q3 = q2.groupby(lambda x: x.cat, total=lambda g: sum(r.val for r in g))

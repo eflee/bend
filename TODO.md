@@ -35,7 +35,7 @@ q.sample(0.1)  # 10% sample
 q.select('name', 'email', 'age')  # keep only these
 q.drop('internal_id', 'temp_field')  # remove these
 ```
-**Why**: More explicit than `hide_cols()`. Current `transform()` can do this but it's awkward.
+**Why**: More explicit than `hide()`. Current `map()` can do this but it's awkward.
 
 **Implementation**: Track as change, apply column selection in _apply_changes.
 
@@ -43,7 +43,7 @@ q.drop('internal_id', 'temp_field')  # remove these
 ```python
 q.rename(old_name='new_name', customer_id='cust_id')
 ```
-**Why**: CSV columns often have bad names. Currently you'd need to transform everything.
+**Why**: CSV columns often have bad names. Currently you'd need to map everything.
 
 **Implementation**: Track rename mapping, apply to DataFrame.columns.
 
@@ -62,7 +62,7 @@ q.fillna({'age': 0, 'city': 'Unknown'})  # column-specific fills
 
 ### 7. Window Functions
 ```python
-q.extend(
+q.assign(
     cumsum_sales=lambda x: ...,  # needs window context
     rolling_avg=lambda x: ...     # needs previous rows
 )
@@ -78,7 +78,7 @@ q.window('sales', cumsum=True, col_name='cumsum_sales')
 q.replace({'region': {'CA': 'California', 'NY': 'New York'}})
 q.replace_values('status', {'old': 'new'})
 ```
-**Why**: Data cleaning. Currently needs `extend()` with conditional logic.
+**Why**: Data cleaning. Currently needs `assign()` with conditional logic.
 
 **Implementation**: Track replacement mappings, apply via pandas replace.
 
@@ -87,7 +87,7 @@ q.replace_values('status', {'old': 'new'})
 q.pivot(index='date', columns='category', values='sales')
 q.melt(id_vars='date', value_vars=['sales', 'revenue'])  # unpivot
 ```
-**Why**: Reshaping is common but `transform()` is too manual for this.
+**Why**: Reshaping is common but `map()` is too manual for this.
 
 **Challenge**: Changes column structure dramatically, hard to replay if source columns change.
 
@@ -106,7 +106,7 @@ Q.concat(q1, q2, q3)  # stack multiple
 ```python
 q.bin('age', bins=[0, 18, 35, 50, 100], labels=['child', 'young', 'middle', 'senior'])
 ```
-**Why**: Can be done with `extend()` + conditionals but verbose.
+**Why**: Can be done with `assign()` + conditionals but verbose.
 
 **Implementation**: Could be useful helper, track as change type.
 
@@ -127,14 +127,14 @@ q.bin('age', bins=[0, 18, 35, 50, 100], labels=['child', 'young', 'middle', 'sen
 - [x] `drop(*cols)` - Column removal (COMPLETED)
 - [x] `rename(**mapping)` - Column renaming (COMPLETED)
 
-### Phase 2: Multi-Q Operations (Architecture Validated)
-Now feasible with **deep copy by default** approach:
-- [ ] `reproducible` property - Track pipeline determinism
-- [ ] `concat(other, deep_copy=True)` - Vertical stacking (simplest, implement first)
-- [ ] `merge(other, on, how, resolve, deep_copy=True)` - Join with explicit conflict resolution
-- [ ] `join(other, on, how, deep_copy=True)` - Convenience wrapper around merge
-- [ ] Set operations: `union(other, deep_copy=True)`, `intersect(other, deep_copy=True)`, `difference(other, deep_copy=True)`
-- [ ] Deep `reload()` - Recursive reload of entire Q tree from disk
+### Phase 2: Multi-Q Operations - ✅ COMPLETED
+Implemented with **deep copy by default** approach:
+- [x] `reproducible` property - Track pipeline determinism (COMPLETED)
+- [x] `concat(other, deep_copy=True)` - Vertical stacking (COMPLETED)
+- [x] `merge(other, on, how, resolve, deep_copy=True)` - Join with explicit conflict resolution (COMPLETED)
+- [x] `join(other, on, how, deep_copy=True)` - Convenience wrapper around merge (COMPLETED)
+- [x] Set operations: `union(other, deep_copy=True)`, `intersect(other, deep_copy=True)`, `difference(other, deep_copy=True)` (COMPLETED)
+- [x] Deep `reload()` - Recursive reload of entire Q tree from disk (COMPLETED)
 
 **Implementation notes:**
 - Store **deep copy** of other Q by default (`deep_copy=True`) for full reproducibility
@@ -178,7 +178,7 @@ Multi-Q operations store **deep copies** of other Q objects by default for full 
 ```python
 # Change history structure:
 [
-    ("extend", {"total": lambda x: x.price * x.qty}),
+    ("assign", {"total": lambda x: x.price * x.qty}),
     ("merge", {
         "other": <deep_copy_of_other_Q>,  # Full deep copy by default
         "on": "customer_id",
@@ -292,7 +292,7 @@ def load(cls, filename: str) -> 'Q':
 
 **Usage:**
 ```python
-q2 = q.extend(total=lambda x: x.price * x.qty)
+q2 = q.assign(total=lambda x: x.price * x.qty)
 usage = q2.memory_usage()
 print(f"Total: {usage['total_mb']} MB")
 print(f"Changes: {usage['changes']} tracked operations")

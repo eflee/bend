@@ -109,19 +109,19 @@ q = Q(df)
 
 ```python
 # Calculate total from price and quantity
-q2 = q.extend(total=lambda x: x.price * x.qty)
+q2 = q.assign(total=lambda x: x.price * x.qty)
 
 # Add multiple columns at once (from original columns)
-q3 = q.extend(
+q3 = q.assign(
     total=lambda x: x.price * x.qty,
     discount=lambda x: x.price * 0.1
 )
 
-# Chain extensions to reference previous extensions
+# Chain assignments to reference previous assignments
 q4 = (q
-    .extend(revenue=lambda x: x.price * x.units)
-    .extend(profit=lambda x: x.revenue - x.cost)
-    .extend(margin=lambda x: x.profit / x.revenue))
+    .assign(revenue=lambda x: x.price * x.units)
+    .assign(profit=lambda x: x.revenue - x.cost)
+    .assign(margin=lambda x: x.profit / x.revenue))
 ```
 
 ### Filtering Data
@@ -134,7 +134,7 @@ q.filter(lambda x: x.purchase_amount > 1000)
 q.filter(lambda x: x.age > 25 and x.region == 'West')
 
 # Computed column filters
-q.extend(total=lambda x: x.price * x.qty).filter(lambda x: x.total > 100)
+q.assign(total=lambda x: x.price * x.qty).filter(lambda x: x.total > 100)
 
 # Safe filtering (exceptions treated as False)
 q.filter(lambda x: int(x.year) >= 2020)  # Non-numeric years excluded
@@ -144,7 +144,7 @@ q.filter(lambda x: int(x.year) >= 2020)  # Non-numeric years excluded
 
 ```python
 # Top 10 by revenue
-q.extend(revenue=lambda x: x.price * x.units).sort('revenue').head(10)
+q.assign(revenue=lambda x: x.price * x.units).sort('revenue').head(10)
 
 # Sort ascending
 q.sort('age', ascending=True)
@@ -156,24 +156,24 @@ q.sort('region', 'sales')
 q.sort('performance', ascending=True).head(5)
 ```
 
-### Transforming Data
+### Mapping Data to New Structure
 
 ```python
 # Combine first and last name
-q.transform(lambda x: {
+q.map(lambda x: {
     'full_name': f"{x.first} {x.last}",
     'email': x.email
 })
 
 # Create summary view
-q.transform(lambda x: {
+q.map(lambda x: {
     'customer': f"{x.first} {x.last}",
     'total_spent': x.purchases * x.avg_price,
     'status': 'VIP' if x.purchases > 10 else 'Regular'
 })
 
 # Extract date components
-q.transform(lambda x: {
+q.map(lambda x: {
     'year': x.date.split('-')[0],
     'month': x.date.split('-')[1],
     'amount': x.amount
@@ -211,7 +211,7 @@ q.groupby(
 ```python
 # Initial load
 q = Q(df, source_path='daily_sales.csv')
-q2 = q.extend(commission=lambda x: x.sales * 0.15)
+q2 = q.assign(commission=lambda x: x.sales * 0.15)
 
 # Later, when daily_sales.csv is updated by another process...
 q3 = q2.reload()  # Reloads CSV and re-applies commission calculation
@@ -244,7 +244,7 @@ q.unhide('id')
 q.unhide()
 
 # Hidden columns still work in calculations
-q.hide('cost').extend(profit=lambda x: x.revenue - x.cost)
+q.hide('cost').assign(profit=lambda x: x.revenue - x.cost)
 ```
 
 **Structural changes (drop/select):**
@@ -256,7 +256,7 @@ q.drop('id', 'temp_field')  # Removed columns can't be used later
 q.select('name', 'email', 'status')
 
 # Dropped columns can't be used in calculations
-q.drop('cost').extend(profit=lambda x: x.revenue - x.cost)  # Error!
+q.drop('cost').assign(profit=lambda x: x.revenue - x.cost)  # Error!
 ```
 
 ### Data Quality
@@ -275,7 +275,7 @@ q.distinct('email', 'phone')
 # Common pattern: dedupe before analysis
 result = (q
     .distinct('order_id')  # Ensure unique orders
-    .extend(revenue=lambda x: x.price * x.qty)
+    .assign(revenue=lambda x: x.price * x.qty)
     .groupby(lambda x: x.region, total=lambda g: sum(r.revenue for r in g))
 )
 ```
@@ -289,7 +289,111 @@ q.rename(customerID='customer_id', amt='amount')
 q.rename(old_name='new_name')
 
 # Chain with other operations
-q.rename(price='unit_price').extend(total=lambda x: x.unit_price * x.qty)
+q.rename(price='unit_price').assign(total=lambda x: x.unit_price * x.qty)
+```
+
+### Multi-DataFrame Operations
+
+**Concatenate (stack rows):**
+```python
+# Combine monthly sales data
+q_jan = Q(df_january)
+q_feb = Q(df_february)
+q_combined = q_jan.concat(q_feb)  # All rows from both
+
+# Self-concatenation (duplicate rows)
+q_double = q.concat(q)
+
+# Performance mode for large datasets (non-reproducible)
+q_combined = q1.concat(huge_q, deep_copy=False)
+```
+
+**Merge (join on keys):**
+```python
+# Basic merge
+customers = Q(customers_df)
+orders = Q(orders_df)
+q = customers.merge(orders, on='customer_id', how='left')
+
+# Merge with column conflict resolution
+q1 = Q(pd.DataFrame({"id": [1, 2], "name": ["Alice", "Bob"], "status": ["active", "inactive"]}))
+q2 = Q(pd.DataFrame({"id": [1, 2], "status": ["pending", "complete"]}))
+
+# Both have 'status' - must resolve!
+q3 = q1.merge(q2, on='id', resolve={'status': lambda left, right: left})
+
+# Self-merge (employee-manager relationship)
+employees = Q(emp_df)
+managers = employees.merge(
+    employees, 
+    on='employee_id',
+    resolve={
+        'name': lambda emp, mgr: emp,
+        'manager_id': lambda e, m: e
+    }
+)
+
+# Multiple keys
+q.merge(other, on=['year', 'month', 'region'])
+```
+
+**Join (simpler merge without conflicts):**
+```python
+# If no column conflicts exist, use join()
+customers.join(orders, on='customer_id', how='left')
+
+# Inner join (only matching rows)
+q1.join(q2, on='id')
+
+# Outer join (all rows from both)
+q1.join(q2, on='id', how='outer')
+```
+
+**Set operations:**
+```python
+# Union (unique rows from both)
+q1 = Q(pd.DataFrame({"x": [1, 2, 3]}))
+q2 = Q(pd.DataFrame({"x": [2, 3, 4]}))
+q3 = q1.union(q2)  # [1, 2, 3, 4]
+
+# Intersect (rows in both)
+q3 = q1.intersect(q2)  # [2, 3]
+
+# Difference (rows in q1 but not q2)
+q3 = q1.difference(q2)  # [1]
+```
+
+**Reproducibility tracking:**
+```python
+# All operations track reproducibility
+q1 = Q(df1)
+q2 = Q(df2)
+q3 = q1.concat(q2)
+print(q3.reproducible)  # True (if both are reproducible)
+
+# Non-deterministic operations break reproducibility
+q2_sample = q2.sample(10)  # No random_state
+print(q2_sample.reproducible)  # False
+
+q4 = q1.concat(q2_sample)
+print(q4.reproducible)  # False (propagated)
+
+# To maintain reproducibility, use random_state
+q2_sample = q2.sample(10, random_state=42)
+print(q2_sample.reproducible)  # True
+```
+
+**Deep reload (recursive):**
+```python
+# Save sources
+q1 = Q(load_csv('sales.csv'), source_path='sales.csv')
+q2 = Q(load_csv('customers.csv'), source_path='customers.csv')
+
+# Merge
+q3 = q1.merge(q2, on='customer_id')
+
+# Update both CSV files, then reload
+q4 = q3.reload()  # Recursively reloads both sources + re-applies merge!
 ```
 
 ### Real-World Pipeline Example
@@ -298,9 +402,9 @@ q.rename(price='unit_price').extend(total=lambda x: x.unit_price * x.qty)
 # Sales analysis pipeline
 result = (q
     # Add calculated fields (chain to reference previous extensions)
-    .extend(total=lambda x: x.price * x.quantity)
-    .extend(discount=lambda x: x.total * x.discount_pct)
-    .extend(final=lambda x: x.total - x.discount)
+    .assign(total=lambda x: x.price * x.quantity)
+    .assign(discount=lambda x: x.total * x.discount_pct)
+    .assign(final=lambda x: x.total - x.discount)
     # Filter for this year
     .filter(lambda x: x.date.startswith('2024'))
     # Only successful transactions
@@ -321,11 +425,11 @@ result.dump('top_sales_2024.csv')
 ```python
 # Long pipeline with many operations
 q2 = (q
-    .extend(a=lambda x: x.x * 2)
+    .assign(a=lambda x: x.x * 2)
     .filter(lambda x: x.a > 10)
-    .extend(b=lambda x: x.a + 5)
+    .assign(b=lambda x: x.a + 5)
     .filter(lambda x: x.b < 100)
-    .extend(c=lambda x: x.b * 3))
+    .assign(c=lambda x: x.b * 3))
 
 # Check change history
 len(q2._changes)  # 5 operations
@@ -335,7 +439,7 @@ q3 = q2.rebase()  # Makes current state the base, clears history
 len(q3._changes)  # 0
 
 # Continue building on flattened state
-q4 = q3.extend(d=lambda x: x.c / 2)
+q4 = q3.assign(d=lambda x: x.c / 2)
 ```
 
 ### Data Quality Checks
@@ -368,7 +472,7 @@ df = load_csv("https://docs.google.com/spreadsheets/d/abc123/edit#gid=456")
 
 ```python
 # Customer lifetime value
-q.extend(
+q.assign(
     purchase_freq=lambda x: x.orders / x.months_active,
     avg_order=lambda x: x.total_spent / x.orders,
     lifetime_months=lambda x: 24,  # 2 year projection
@@ -376,12 +480,12 @@ q.extend(
 )
 
 # Percentile ranking
-sales = q.extend(
+sales = q.assign(
     total_sales=lambda x: x.price * x.units
 ).to_df()
 sales_sorted = sorted([r.total_sales for r in rows(sales)])
 
-q.extend(
+q.assign(
     percentile=lambda x: sum(1 for s in sales_sorted if s <= x.price * x.units) / len(sales_sorted) * 100
 )
 
@@ -407,9 +511,9 @@ clean = (q
     # Positive amounts
     .filter(lambda x: x.amount > 0)
     # Standardize region names
-    .extend(region_clean=lambda x: x.region.strip().upper())
+    .assign(region_clean=lambda x: x.region.strip().upper())
     # Flag outliers
-    .extend(is_outlier=lambda x: x.amount > q.mean('amount') + 3 * q.std('amount')))
+    .assign(is_outlier=lambda x: x.amount > q.mean('amount') + 3 * q.std('amount')))
 
 # Review flagged records
 outliers = clean.filter(lambda x: x.is_outlier)
@@ -447,7 +551,7 @@ q.mean('price')             # Average price?
 
 # Find top sellers
 top = (q
-    .extend(revenue=lambda x: x.price * x.units_sold)
+    .assign(revenue=lambda x: x.price * x.units_sold)
     .sort('revenue')
     .head(20))
 
@@ -457,7 +561,7 @@ for category in q.unique('product_category'):
     print(f"{category}: {subset.sum('units_sold')} units, ${subset.sum('revenue'):.2f}")
 
 # Save analysis
-q = q.extend(revenue=lambda x: x.price * x.units_sold)
+q = q.assign(revenue=lambda x: x.price * x.units_sold)
 q = reload()  # If data updated, refresh everything
 ```
 
@@ -466,9 +570,9 @@ q = reload()  # If data updated, refresh everything
 ```python
 # Build complex pipeline
 q2 = (q
-    .extend(margin=lambda x: (x.price - x.cost) / x.price)
+    .assign(margin=lambda x: (x.price - x.cost) / x.price)
     .filter(lambda x: x.margin > 0.2)
-    .extend(profit=lambda x: x.margin * x.revenue)
+    .assign(profit=lambda x: x.margin * x.revenue)
     .sort('profit')
     .head(50))
 
@@ -488,16 +592,16 @@ q_fresh = Q(fresh_data, source_path='updated_data.csv')
 **Method chaining is your friend:**
 ```python
 result = (q
-    .extend(calc1=...)
+    .assign(calc1=...)
     .filter(...)
-    .extend(calc2=...)
+    .assign(calc2=...)
     .sort(...)
     .head(...))
 ```
 
 **Lambda functions have access to all columns:**
 ```python
-q.extend(new_col=lambda x: x.col1 + x.col2 * x.col3)
+q.assign(new_col=lambda x: x.col1 + x.col2 * x.col3)
 ```
 
 **Use aggregations for quick insights:**
@@ -508,17 +612,29 @@ print(f"Range: ${q.min('price')} - ${q.max('price')}")
 
 **Hidden columns are still usable:**
 ```python
-q.hide('internal_cost').extend(profit=lambda x: x.price - x.internal_cost)
+q.hide('internal_cost').assign(profit=lambda x: x.price - x.internal_cost)
 ```
 
 **Reload when external data changes:**
 ```python
-q = q.extend(calculated=...).filter(...)
+q = q.assign(calculated=...).filter(...)
 # File updated by another process
 q = reload()  # Reloads file, re-applies all transformations
 ```
 
 ## Version
 
-**1.0.0** - Complete refactoring with change history tracking
+**2.0.0** - V2 - Multi-DataFrame Operations
+- **Breaking:** Renamed `extend()` to `assign()` to align with pandas convention
+- **Breaking:** Renamed `transform()` to `map()` for clearer functional programming semantics
+- Added `concat()` for vertical stacking with optional deep copy
+- Added `merge()` with explicit conflict resolution and reproducibility tracking
+- Added `join()` as convenience wrapper for merge without conflicts
+- Added set operations: `union()`, `intersect()`, `difference()`
+- Added `reproducible` property to track pipeline determinism
+- Changed `sample()` to be non-idempotent by default (use `random_state` for reproducibility)
+- Made `reload()` deep/recursive to handle multi-Q operations
+- Added `deep_copy` parameter to all multi-Q operations (default True)
+
+**1.0.0** - V1 - Initial dataset operations. 
 
