@@ -242,6 +242,334 @@ class TestQFilter:
         assert len(q2._changes) == 1
         assert q2._changes[0][0] == "filter"
 
+    def test_filter_inverse_lambda(self):
+        """Should invert lambda filter when inverse=True."""
+        df = pd.DataFrame({"age": [25, 15, 30, 12]})
+        q = Q(df)
+        
+        # Normal filter: age >= 18
+        adults = q.filter(lambda x: x.age >= 18)
+        assert list(adults.to_df()["age"]) == [25, 30]
+        
+        # Inverse filter: age < 18
+        minors = q.filter(lambda x: x.age >= 18, inverse=True)
+        assert list(minors.to_df()["age"]) == [15, 12]
+    
+    def test_filter_semi_join_single_column(self):
+        """Should keep rows where key exists in other Q (semi-join)."""
+        customers = Q(pd.DataFrame({
+            'customer_id': [1, 2, 3, 4],
+            'name': ['Alice', 'Bob', 'Carol', 'Dave']
+        }))
+        orders = Q(pd.DataFrame({
+            'order_id': [101, 102, 103],
+            'customer_id': [1, 3, 1]
+        }))
+        
+        result = customers.filter(orders, on='customer_id')
+        
+        assert len(result) == 2
+        assert set(result.to_df()['customer_id']) == {1, 3}
+        assert set(result.to_df()['name']) == {'Alice', 'Carol'}
+        assert list(result.to_df().columns) == ['customer_id', 'name']
+    
+    def test_filter_semi_join_multiple_columns(self):
+        """Should support multi-column keys in semi-join."""
+        people = Q(pd.DataFrame({
+            'first': ['Alice', 'Bob', 'Carol'],
+            'last': ['Smith', 'Jones', 'Smith'],
+            'age': [25, 30, 35]
+        }))
+        verified = Q(pd.DataFrame({
+            'first': ['Alice', 'Carol'],
+            'last': ['Smith', 'Smith']
+        }))
+        
+        result = people.filter(verified, on=['first', 'last'])
+        
+        assert len(result) == 2
+        assert set(result.to_df()['age']) == {25, 35}
+    
+    def test_filter_anti_join_single_column(self):
+        """Should keep rows where key NOT in other Q (anti-join)."""
+        customers = Q(pd.DataFrame({
+            'customer_id': [1, 2, 3, 4],
+            'name': ['Alice', 'Bob', 'Carol', 'Dave']
+        }))
+        orders = Q(pd.DataFrame({
+            'order_id': [101, 102],
+            'customer_id': [1, 3]
+        }))
+        
+        result = customers.filter(orders, on='customer_id', inverse=True)
+        
+        assert len(result) == 2
+        assert set(result.to_df()['customer_id']) == {2, 4}
+        assert set(result.to_df()['name']) == {'Bob', 'Dave'}
+    
+    def test_filter_anti_join_multiple_columns(self):
+        """Should support multi-column keys in anti-join."""
+        people = Q(pd.DataFrame({
+            'first': ['Alice', 'Bob', 'Carol'],
+            'last': ['Smith', 'Jones', 'Smith'],
+            'age': [25, 30, 35]
+        }))
+        excluded = Q(pd.DataFrame({
+            'first': ['Alice'],
+            'last': ['Smith']
+        }))
+        
+        result = people.filter(excluded, on=['first', 'last'], inverse=True)
+        
+        assert len(result) == 2
+        assert set(result.to_df()['first']) == {'Bob', 'Carol'}
+    
+    def test_filter_q_without_on_raises(self):
+        """Should raise ValueError if 'on' not specified with Q."""
+        q1 = Q(pd.DataFrame({'id': [1, 2]}))
+        q2 = Q(pd.DataFrame({'id': [1]}))
+        
+        with pytest.raises(ValueError, match="Must specify 'on' parameter"):
+            q1.filter(q2)
+    
+    def test_filter_lambda_with_on_raises(self):
+        """Should raise ValueError if 'on' specified with lambda."""
+        q = Q(pd.DataFrame({'x': [1, 2]}))
+        
+        with pytest.raises(ValueError, match="'on' parameter only applies"):
+            q.filter(lambda x: x.x > 1, on='x')
+    
+    def test_filter_invalid_type_raises(self):
+        """Should raise TypeError for invalid fn_or_q type."""
+        q = Q(pd.DataFrame({'x': [1, 2]}))
+        
+        with pytest.raises(TypeError, match="Expected Callable or Q"):
+            q.filter("not a callable or Q")
+    
+    def test_filter_missing_column_in_self_raises(self):
+        """Should raise ValueError if 'on' column missing in self."""
+        q1 = Q(pd.DataFrame({'id': [1, 2]}))
+        q2 = Q(pd.DataFrame({'other_id': [1]}))
+        
+        with pytest.raises(ValueError, match="Columns not found in left Q: \\['other_id'\\]"):
+            q1.filter(q2, on='other_id')
+    
+    def test_filter_missing_column_in_other_raises(self):
+        """Should raise ValueError if 'on' column missing in other."""
+        q1 = Q(pd.DataFrame({'id': [1, 2]}))
+        q2 = Q(pd.DataFrame({'other_id': [1]}))
+        
+        with pytest.raises(ValueError, match="Columns not found in right Q: \\['id'\\]"):
+            q1.filter(q2, on='id')
+    
+    def test_filter_q_preserves_only_left_columns(self):
+        """Semi/anti-join should only return left Q's columns."""
+        left = Q(pd.DataFrame({
+            'id': [1, 2, 3],
+            'name': ['Alice', 'Bob', 'Carol']
+        }))
+        right = Q(pd.DataFrame({
+            'id': [1, 3],
+            'value': [100, 200]
+        }))
+        
+        result = left.filter(right, on='id')
+        
+        assert list(result.to_df().columns) == ['id', 'name']
+        assert 'value' not in result.to_df().columns
+    
+    def test_filter_q_deduplicates_right_keys(self):
+        """Should handle duplicate keys in right Q correctly."""
+        left = Q(pd.DataFrame({
+            'id': [1, 2, 3],
+            'name': ['Alice', 'Bob', 'Carol']
+        }))
+        right = Q(pd.DataFrame({
+            'id': [1, 1, 1, 3]  # Duplicates
+        }))
+        
+        result = left.filter(right, on='id')
+        
+        # Should match rows with id=1 and id=3 (no duplicates from join)
+        assert len(result) == 2
+        assert set(result.to_df()['id']) == {1, 3}
+
+
+class TestQFilterFlags:
+    """Tests for deterministic and reloadable flag propagation in filter operations."""
+    
+    def test_filter_lambda_preserves_deterministic_true(self):
+        """Lambda filter on deterministic Q should remain deterministic."""
+        q = Q(pd.DataFrame({'x': [1, 2, 3]}))
+        assert q.deterministic is True
+        
+        result = q.filter(lambda x: x.x > 1)
+        assert result.deterministic is True
+    
+    def test_filter_lambda_preserves_deterministic_false(self):
+        """Lambda filter on non-deterministic Q should remain non-deterministic."""
+        q = Q(pd.DataFrame({'x': range(10)}))
+        q_non_det = q.sample(n=5)  # Non-deterministic
+        assert q_non_det.deterministic is False
+        
+        result = q_non_det.filter(lambda x: x.x > 2)
+        assert result.deterministic is False
+    
+    def test_filter_inverse_lambda_preserves_flags(self):
+        """Inverse lambda filter should preserve both flags."""
+        q = Q(pd.DataFrame({'x': [1, 2, 3]}))
+        assert q.deterministic is True
+        assert q.reloadable is False
+        
+        result = q.filter(lambda x: x.x > 1, inverse=True)
+        assert result.deterministic is True
+        assert result.reloadable is False
+    
+    def test_filter_lambda_preserves_reloadable_true(self, tmp_path):
+        """Lambda filter on reloadable Q should remain reloadable."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("x,y\n1,a\n2,b\n3,c\n")
+        
+        q = Q(load_csv(str(csv_file)), source_path=str(csv_file))
+        assert q.reloadable is True
+        
+        result = q.filter(lambda x: x.x > 1)
+        assert result.reloadable is True
+    
+    def test_filter_lambda_preserves_reloadable_false(self):
+        """Lambda filter on non-reloadable Q should remain non-reloadable."""
+        q = Q(pd.DataFrame({'x': [1, 2, 3]}))
+        assert q.reloadable is False
+        
+        result = q.filter(lambda x: x.x > 1)
+        assert result.reloadable is False
+    
+    def test_semi_join_preserves_left_deterministic_true(self):
+        """Semi-join should preserve deterministic flag from left Q."""
+        left = Q(pd.DataFrame({'id': [1, 2, 3], 'name': ['A', 'B', 'C']}))
+        right = Q(pd.DataFrame({'id': [1, 3]}))
+        
+        assert left.deterministic is True
+        result = left.filter(right, on='id')
+        assert result.deterministic is True
+    
+    def test_semi_join_preserves_left_deterministic_false(self):
+        """Semi-join from non-deterministic left should remain non-deterministic."""
+        left = Q(pd.DataFrame({'id': range(10), 'val': range(10)}))
+        left_non_det = left.sample(n=5)
+        right = Q(pd.DataFrame({'id': [1, 2, 3]}))
+        
+        assert left_non_det.deterministic is False
+        result = left_non_det.filter(right, on='id')
+        assert result.deterministic is False
+    
+    def test_semi_join_preserves_left_reloadable_true(self, tmp_path):
+        """Semi-join should preserve reloadable flag from left Q."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("id,name\n1,Alice\n2,Bob\n3,Carol\n")
+        
+        left = Q(load_csv(str(csv_file)), source_path=str(csv_file))
+        right = Q(pd.DataFrame({'id': [1, 3]}))
+        
+        assert left.reloadable is True
+        assert right.reloadable is False
+        
+        result = left.filter(right, on='id')
+        assert result.reloadable is True  # Should inherit from left, not right
+    
+    def test_semi_join_preserves_left_reloadable_false(self, tmp_path):
+        """Semi-join from non-reloadable left should remain non-reloadable."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("id,name\n1,Alice\n2,Bob\n")
+        
+        left = Q(pd.DataFrame({'id': [1, 2, 3]}))
+        right = Q(load_csv(str(csv_file)), source_path=str(csv_file))
+        
+        assert left.reloadable is False
+        assert right.reloadable is True
+        
+        result = left.filter(right, on='id')
+        assert result.reloadable is False  # Should inherit from left, not right
+    
+    def test_anti_join_preserves_left_deterministic_true(self):
+        """Anti-join should preserve deterministic flag from left Q."""
+        left = Q(pd.DataFrame({'id': [1, 2, 3], 'name': ['A', 'B', 'C']}))
+        right = Q(pd.DataFrame({'id': [1]}))
+        
+        assert left.deterministic is True
+        result = left.filter(right, on='id', inverse=True)
+        assert result.deterministic is True
+    
+    def test_anti_join_preserves_left_deterministic_false(self):
+        """Anti-join from non-deterministic left should remain non-deterministic."""
+        left = Q(pd.DataFrame({'id': range(10), 'val': range(10)}))
+        left_non_det = left.sample(n=5)
+        right = Q(pd.DataFrame({'id': [1, 2, 3]}))
+        
+        assert left_non_det.deterministic is False
+        result = left_non_det.filter(right, on='id', inverse=True)
+        assert result.deterministic is False
+    
+    def test_anti_join_preserves_left_reloadable_true(self, tmp_path):
+        """Anti-join should preserve reloadable flag from left Q."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("id,name\n1,Alice\n2,Bob\n3,Carol\n")
+        
+        left = Q(load_csv(str(csv_file)), source_path=str(csv_file))
+        right = Q(pd.DataFrame({'id': [1]}))
+        
+        assert left.reloadable is True
+        assert right.reloadable is False
+        
+        result = left.filter(right, on='id', inverse=True)
+        assert result.reloadable is True  # Should inherit from left, not right
+    
+    def test_anti_join_preserves_left_reloadable_false(self, tmp_path):
+        """Anti-join from non-reloadable left should remain non-reloadable."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("id,name\n1,Alice\n2,Bob\n")
+        
+        left = Q(pd.DataFrame({'id': [1, 2, 3]}))
+        right = Q(load_csv(str(csv_file)), source_path=str(csv_file))
+        
+        assert left.reloadable is False
+        assert right.reloadable is True
+        
+        result = left.filter(right, on='id', inverse=True)
+        assert result.reloadable is False  # Should inherit from left, not right
+    
+    def test_filter_chain_preserves_flags(self, tmp_path):
+        """Chained filter operations should preserve flags correctly."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("id,age,name\n1,25,Alice\n2,15,Bob\n3,30,Carol\n")
+        
+        q = Q(load_csv(str(csv_file)), source_path=str(csv_file))
+        other = Q(pd.DataFrame({'id': [1, 3]}))
+        
+        # Chain: lambda -> semi-join -> lambda -> anti-join
+        result = (q
+            .filter(lambda x: x.age >= 18)  # deterministic=T, reloadable=T
+            .filter(other, on='id')          # deterministic=T, reloadable=T
+            .filter(lambda x: x.id < 10)     # deterministic=T, reloadable=T
+        )
+        
+        assert result.deterministic is True
+        assert result.reloadable is True
+    
+    def test_filter_on_rebased_q(self):
+        """Filter after rebase should have correct flags."""
+        q = Q(pd.DataFrame({'id': [1, 2, 3]}))
+        filtered = q.filter(lambda x: x.id > 1)
+        rebased = filtered.rebase()
+        
+        assert rebased.deterministic is True  # Empty history is deterministic
+        assert rebased.reloadable is False    # History lost
+        
+        # Filter the rebased Q
+        result = rebased.filter(lambda x: x.id < 3)
+        assert result.deterministic is True
+        assert result.reloadable is False
+
 
 class TestQSortHeadTailSample:
     """Tests for Q.sort(), Q.head(), Q.tail(), and Q.sample() methods."""

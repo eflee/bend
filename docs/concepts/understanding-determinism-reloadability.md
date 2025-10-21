@@ -453,12 +453,113 @@ q5 = q4.reload()  # Same 1000 rows every time
 
 ## Operations Reference
 
+### Complete Method Reference Tables
+
+#### Table 1: Flag Propagation for All Methods
+
+This table shows how each method affects the `deterministic` and `reloadable` flags.
+
+| Method | Deterministic Flag | Reloadable Flag | Notes |
+|--------|-------------------|-----------------|-------|
+| **Data Manipulation** |
+| `assign()` | Inherited from parent | Inherited from parent | Always preserves both flags |
+| `filter(lambda ...)` | Inherited from parent | Inherited from parent | Lambda filters preserve parent flags |
+| `filter(lambda ..., inverse=True)` | Inherited from parent | Inherited from parent | Inverse lambda preserves parent flags |
+| `filter(other_q, on=...)` | Inherited from LEFT (self) | Inherited from LEFT (self) | Semi-join: ignores right Q flags |
+| `filter(other_q, on=..., inverse=True)` | Inherited from LEFT (self) | Inherited from LEFT (self) | Anti-join: ignores right Q flags |
+| `map()` | Inherited from parent | Inherited from parent | Always preserves both flags |
+| **Row Operations** |
+| `sort()` | Inherited from parent | Inherited from parent | Deterministic sort (stable) |
+| `head()` | Inherited from parent | Inherited from parent | Always preserves both flags |
+| `tail()` | Inherited from parent | Inherited from parent | Always preserves both flags |
+| `sample(random_state=None)` | **Sets to False** | Inherited from parent | Non-deterministic by default |
+| `sample(random_state=42)` | Inherited from parent | Inherited from parent | Deterministic with seed |
+| `distinct()` | Inherited from parent | Inherited from parent | Always preserves both flags |
+| **Column Operations** |
+| `drop()` | Inherited from parent | Inherited from parent | Always preserves both flags |
+| `select()` | Inherited from parent | Inherited from parent | Always preserves both flags |
+| `rename()` | Inherited from parent | Inherited from parent | Always preserves both flags |
+| `hide()` | Inherited from parent | Inherited from parent | Display-only, no flag change |
+| `unhide()` | Inherited from parent | Inherited from parent | Display-only, no flag change |
+| **Multi-Q Operations** |
+| `concat(other, deep_copy=True)` | `self AND other` | `self AND other` | Both must be True for True result |
+| `concat(other, deep_copy=False)` | **Sets to False** | **Sets to False** | Reference mode breaks guarantees |
+| `merge(other, deep_copy=True)` | `self AND other` | `self AND other` | Both must be True for True result |
+| `merge(other, deep_copy=False)` | **Sets to False** | **Sets to False** | Reference mode breaks guarantees |
+| `join(other, deep_copy=True)` | `self AND other` | `self AND other` | Both must be True for True result |
+| `join(other, deep_copy=False)` | **Sets to False** | **Sets to False** | Reference mode breaks guarantees |
+| `union(other, deep_copy=True)` | `self AND other` | `self AND other` | Both must be True for True result |
+| `union(other, deep_copy=False)` | **Sets to False** | **Sets to False** | Reference mode breaks guarantees |
+| `intersect(other, deep_copy=True)` | `self AND other` | `self AND other` | Both must be True for True result |
+| `intersect(other, deep_copy=False)` | **Sets to False** | **Sets to False** | Reference mode breaks guarantees |
+| `difference(other, deep_copy=True)` | `self AND other` | `self AND other` | Both must be True for True result |
+| `difference(other, deep_copy=False)` | **Sets to False** | **Sets to False** | Reference mode breaks guarantees |
+| **Lifecycle** |
+| `replay()` | Unchanged | Unchanged | Just re-executes operations |
+| `reload()` | Unchanged | Unchanged | Reloads from disk + replays |
+| `rebase()` | **Sets to True** | **Sets to False** | Flattens history (deterministic but not reloadable) |
+| **Aggregations** |
+| `groupby()` | N/A (resets) | **Sets to False** | Terminal operation, creates new Q |
+| `sum()`, `mean()`, etc. | N/A (scalar) | N/A (scalar) | Returns scalar, not Q |
+
+**Legend:**
+- ✅ **Inherited from parent** - Takes the flag value from the source Q
+- ✅ **Inherited from LEFT (self)** - For filtering, only considers the left Q
+- ⚠️ **Sets to False** - Operation explicitly sets the flag to False
+- ✅ **Sets to True** - Operation explicitly sets the flag to True
+- ✅ **`self AND other`** - Result is True only if BOTH Qs have True
+- ❌ **N/A** - Not applicable (returns scalar or resets Q)
+
+#### Table 2: Determinism of Each Method
+
+This table shows whether each method's **operation itself** is deterministic.
+
+| Method | Deterministic? | Conditions |
+|--------|---------------|------------|
+| **Data Manipulation** |
+| `assign()` | ✅ Yes | Deterministic if lambda is deterministic |
+| `filter()` | ✅ Yes | Deterministic if predicate is deterministic |
+| `map()` | ✅ Yes | Deterministic if lambda is deterministic |
+| **Row Operations** |
+| `sort()` | ✅ Yes | Stable sort (preserves order of equal elements) |
+| `head()` | ✅ Yes | Always returns first N rows in order |
+| `tail()` | ✅ Yes | Always returns last N rows in order |
+| `sample(n, random_state=None)` | ❌ No | Random without seed |
+| `sample(n, random_state=42)` | ✅ Yes | Deterministic with seed |
+| `distinct()` | ✅ Yes | Keeps first occurrence of each unique row |
+| **Column Operations** |
+| `drop()` | ✅ Yes | Always drops same columns |
+| `select()` | ✅ Yes | Always keeps same columns |
+| `rename()` | ✅ Yes | Always renames consistently |
+| `hide()` | ✅ Yes | Display-only operation |
+| `unhide()` | ✅ Yes | Display-only operation |
+| **Multi-Q Operations** |
+| `concat(other)` | ✅ Yes | Concatenates in order |
+| `merge(other, on, how='inner')` | ✅ Yes | Deterministic merge with explicit `on` |
+| `merge(other, on, how='left')` | ✅ Yes | Deterministic with explicit join type |
+| `join(other, on)` | ✅ Yes | Wrapper around merge (inner join) |
+| `union(other)` | ✅ Yes | De-duplicates with deterministic ordering |
+| `intersect(other)` | ✅ Yes | Uses explicit column matching + stable de-duplication |
+| `difference(other)` | ✅ Yes | Uses explicit column matching + stable de-duplication |
+| **Lifecycle** |
+| `replay()` | ✅ Yes | Re-executes operations (same as original) |
+| `reload()` | ✅ Yes | Reloads from disk (file content determines result) |
+| `rebase()` | ✅ Yes | Flattens to current state |
+| **Aggregations** |
+| `groupby()` | ⚠️ Partial | Deterministic if group keys and aggregations are |
+| `sum()`, `mean()`, etc. | ✅ Yes | Deterministic aggregation functions |
+
+**Key Points:**
+- ✅ **Yes** = Operation always produces same output for same input
+- ❌ **No** = Operation may produce different output for same input
+- ⚠️ **Partial** = Depends on lambda/function determinism
+
 ### Always Safe (Preserve All Properties)
 
 These operations preserve both `reloadable` and `deterministic`:
 
 - `assign()` - Add computed columns
-- `filter()` - Filter rows
+- `filter()` - Filter rows (all variants)
 - `map()` - Transform rows
 - `sort()` - Sort by columns
 - `head()` / `tail()` - Take first/last N rows

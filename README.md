@@ -105,7 +105,19 @@ print(q3.deterministic)  # True - seeded random
 print(q3.reloadable)     # True - can reload
 ```
 
-**Learn more**: See [Understanding Determinism & Reloadability](docs/concepts/understanding-determinism-reloadability.md) for a comprehensive guide.
+#### Quick Reference: Flag Behavior
+
+| Operation Type | Examples | `deterministic` | `reloadable` |
+|---------------|----------|----------------|--------------|
+| **Safe operations** | `filter()`, `assign()`, `map()`, `sort()`, `head()` | ✅ Inherited | ✅ Inherited |
+| **Sampling without seed** | `sample(100)` | ❌ Sets to False | ✅ Inherited |
+| **Sampling with seed** | `sample(100, random_state=42)` | ✅ Inherited | ✅ Inherited |
+| **Multi-Q (default)** | `merge(q2)`, `concat(q2)` | ✅ Both must be True | ✅ Both must be True |
+| **Multi-Q (no copy)** | `merge(q2, deep_copy=False)` | ❌ Sets to False | ❌ Sets to False |
+| **Rebase** | `rebase()` | ✅ Sets to True | ❌ Sets to False |
+| **Groupby** | `groupby(...)` | N/A (new Q) | ❌ Sets to False |
+
+**Learn more**: See [Understanding Determinism & Reloadability](docs/concepts/understanding-determinism-reloadability.md) for complete tables of all methods.
 
 ## Basic Examples
 

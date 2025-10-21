@@ -306,6 +306,80 @@ class Q:
         params.update(kwargs)
         return Q(**params)
     
+    def _semi_join(self, other: 'Q', on) -> 'Q':
+        """Keep rows from self where key exists in other (semi-join).
+        
+        Internal method used by filter() with Q parameter.
+        """
+        # Normalize 'on' to list
+        if isinstance(on, str):
+            on_cols = [on]
+        else:
+            on_cols = list(on)
+        
+        # Validate columns exist in self
+        missing_in_self = [col for col in on_cols if col not in self._df.columns]
+        if missing_in_self:
+            raise ValueError(
+                f"Columns not found in left Q: {missing_in_self}\n"
+                f"Available columns: {list(self._df.columns)}"
+            )
+        
+        # Validate columns exist in other
+        missing_in_other = [col for col in on_cols if col not in other._df.columns]
+        if missing_in_other:
+            raise ValueError(
+                f"Columns not found in right Q: {missing_in_other}\n"
+                f"Available columns: {list(other._df.columns)}"
+            )
+        
+        # Get unique keys from other
+        other_keys = other._df[on_cols].drop_duplicates()
+        
+        # Inner merge gives us rows where keys match, then keep only self's columns
+        result_df = pd.merge(self._df, other_keys, on=on_cols, how='inner')
+        result_df = result_df[self._df.columns]  # Keep only original columns
+        result_df = result_df.reset_index(drop=True)
+        
+        return self._copy_with(df=result_df)
+    
+    def _anti_join(self, other: 'Q', on) -> 'Q':
+        """Keep rows from self where key does NOT exist in other (anti-join).
+        
+        Internal method used by filter() with Q parameter and inverse=True.
+        """
+        # Normalize 'on' to list
+        if isinstance(on, str):
+            on_cols = [on]
+        else:
+            on_cols = list(on)
+        
+        # Validate columns exist in both
+        missing_in_self = [col for col in on_cols if col not in self._df.columns]
+        if missing_in_self:
+            raise ValueError(
+                f"Columns not found in left Q: {missing_in_self}\n"
+                f"Available columns: {list(self._df.columns)}"
+            )
+        
+        missing_in_other = [col for col in on_cols if col not in other._df.columns]
+        if missing_in_other:
+            raise ValueError(
+                f"Columns not found in right Q: {missing_in_other}\n"
+                f"Available columns: {list(other._df.columns)}"
+            )
+        
+        # Get unique keys from other
+        other_keys = other._df[on_cols].drop_duplicates()
+        
+        # Left merge with indicator to find non-matches
+        merged = pd.merge(self._df, other_keys, on=on_cols, how='left', indicator=True)
+        result_df = merged[merged['_merge'] == 'left_only'].drop('_merge', axis=1)
+        result_df = result_df[self._df.columns]  # Keep only original columns
+        result_df = result_df.reset_index(drop=True)
+        
+        return self._copy_with(df=result_df)
+    
     def _display_df(self) -> pd.DataFrame:
         """Get DataFrame with hidden columns excluded for display."""
         if self._hidden_cols:
@@ -470,24 +544,75 @@ class Q:
         
         return self._copy_with(df=new_df, changes=new_changes)
     
-    def filter(self, fn: Callable) -> 'Q':
-        """Filter rows based on a predicate function.
+    def filter(self, fn_or_q, on=None, *, inverse=False) -> 'Q':
+        """Filter rows by condition or by existence in another Q.
         
         Args:
-            fn: A function that takes a Row and returns a boolean
-            
-        Returns:
-            A new Q object containing only rows where fn(row) is True
-            
-        Example:
-            >>> q.filter(lambda x: x.region == 'CA')
-            
-        Idempotent: Yes
-        """
-        new_changes = self._changes + [("filter", fn)]
-        new_df = self._apply_changes(self._base_df, new_changes)
+            fn_or_q: Either:
+                - Callable: Lambda function for traditional filtering
+                - Q object: Check if keys exist in this Q (semi/anti-join)
+            on: Required if fn_or_q is a Q. Column(s) to match on (string or list).
+            inverse: If True, inverts the filter logic:
+                - With lambda: keeps rows where fn returns False
+                - With Q: keeps rows NOT in other (anti-join)
         
-        return self._copy_with(df=new_df, changes=new_changes)
+        Returns:
+            Filtered Q object
+            
+        Examples:
+            >>> # Traditional filter with lambda
+            >>> q.filter(lambda x: x.age > 18)
+            
+            >>> # Inverse lambda filter (keep rows where condition is False)
+            >>> q.filter(lambda x: x.age > 18, inverse=True)  # Keep age <= 18
+            
+            >>> # Semi-join: keep customers who have orders
+            >>> customers.filter(orders, on='customer_id')
+            
+            >>> # Anti-join: keep customers who DON'T have orders
+            >>> customers.filter(orders, on='customer_id', inverse=True)
+            
+            >>> # Multi-column matching
+            >>> q.filter(other, on=['first_name', 'last_name'])
+            
+        Deterministic: Yes
+        """
+        if isinstance(fn_or_q, Q):
+            # Q-based filtering (semi/anti-join)
+            other = fn_or_q
+            if on is None:
+                raise ValueError(
+                    "Must specify 'on' parameter when filtering by Q.\n"
+                    "Example: q.filter(other_q, on='id')"
+                )
+            
+            if inverse:
+                return self._anti_join(other, on)
+            else:
+                return self._semi_join(other, on)
+        
+        elif callable(fn_or_q):
+            # Traditional lambda filtering
+            if on is not None:
+                raise ValueError("'on' parameter only applies when filtering by Q")
+            
+            fn = fn_or_q
+            
+            if inverse:
+                # Wrap function to invert logic
+                inverted_fn = lambda row: not fn(row)
+                new_changes = self._changes + [("filter", inverted_fn)]
+            else:
+                new_changes = self._changes + [("filter", fn)]
+            
+            new_df = self._apply_changes(self._base_df, new_changes)
+            return self._copy_with(df=new_df, changes=new_changes)
+        
+        else:
+            raise TypeError(
+                f"Expected Callable or Q, got {type(fn_or_q).__name__}.\n"
+                f"Example: q.filter(lambda x: x.age > 18) or q.filter(other_q, on='id')"
+            )
     
     def groupby(self, keyfn: Callable, **aggs) -> 'Q':
         """Group rows by a key function and compute aggregations.
@@ -881,46 +1006,81 @@ class Q:
     def union(self, other: 'Q', deep_copy: bool = True) -> 'Q':
         """Union with another Q (concat + distinct to remove duplicates).
         
-        Combines rows from both Q objects and removes duplicates. Columns must match.
-        Preserves insertion order (self first, then other's unique rows).
+        Combines rows from both Q objects and removes duplicates. Requires both Q objects
+        to have identical columns (pure set operation).
         
         Args:
-            other: Another Q object to union with (must have same columns)
+            other: Another Q object to union with (must have identical columns)
             deep_copy: If True (default), stores a deep copy for full reproducibility.
                       If False, stores reference and marks as non-deterministic/non-reloadable.
                       
         Returns:
             A new Q object with unique rows from both Q objects
             
+        Raises:
+            ValueError: If column sets don't match exactly
+            
         Examples:
-            >>> q1 = Q(df1)  # [1, 2, 3]
-            >>> q2 = Q(df2)  # [2, 3, 4]
+            >>> q1 = Q(pd.DataFrame({'a': [1, 2, 3]}))
+            >>> q2 = Q(pd.DataFrame({'a': [2, 3, 4]}))
             >>> q3 = q1.union(q2)  # [1, 2, 3, 4]
+            
+            >>> # Align schemas first if columns differ
+            >>> q1 = q1.select('id', 'name')
+            >>> q2 = q2.select('id', 'name')
+            >>> q3 = q1.union(q2)
             
         Deterministic: Yes (if both Q objects are deterministic and deep_copy=True)
         """
+        # Validate matching schemas (pure set operation requirement)
+        if set(self._df.columns) != set(other._df.columns):
+            raise ValueError(
+                f"Cannot perform union - column mismatch.\n"
+                f"Left columns: {sorted(self._df.columns)}\n"
+                f"Right columns: {sorted(other._df.columns)}\n"
+                f"Hint: Use .select() to align schemas first, or use .merge() for different schemas."
+            )
+        
         return self.concat(other, deep_copy=deep_copy).distinct()
     
     def intersect(self, other: 'Q', deep_copy: bool = True) -> 'Q':
         """Intersect with another Q (rows that appear in both).
         
-        Returns only rows that appear in both Q objects. Columns must match.
+        Returns only rows that appear in both Q objects. Requires both Q objects
+        to have identical columns (pure set operation).
         
         Args:
-            other: Another Q object to intersect with (must have same columns)
+            other: Another Q object to intersect with (must have identical columns)
             deep_copy: If True (default), stores a deep copy for full reproducibility.
                       If False, stores reference and marks as non-deterministic/non-reloadable.
                       
         Returns:
             A new Q object with rows common to both Q objects
             
+        Raises:
+            ValueError: If column sets don't match exactly
+            
         Examples:
-            >>> q1 = Q(df1)  # [1, 2, 3]
-            >>> q2 = Q(df2)  # [2, 3, 4]
+            >>> q1 = Q(pd.DataFrame({'a': [1, 2, 3]}))
+            >>> q2 = Q(pd.DataFrame({'a': [2, 3, 4]}))
             >>> q3 = q1.intersect(q2)  # [2, 3]
+            
+            >>> # Align schemas first if columns differ
+            >>> q1 = q1.select('id', 'name')
+            >>> q2 = q2.select('id', 'name')
+            >>> q3 = q1.intersect(q2)
             
         Deterministic: Yes (if both Q objects are deterministic and deep_copy=True)
         """
+        # Validate matching schemas (pure set operation requirement)
+        if set(self._df.columns) != set(other._df.columns):
+            raise ValueError(
+                f"Cannot perform intersect - column mismatch.\n"
+                f"Left columns: {sorted(self._df.columns)}\n"
+                f"Right columns: {sorted(other._df.columns)}\n"
+                f"Hint: Use .select() to align schemas first."
+            )
+        
         # Get the other Q's DataFrame
         if other is self:
             other_copy = copy.deepcopy(self)
@@ -931,9 +1091,10 @@ class Q:
         
         other_df = other_copy._apply_changes(other_copy._base_df, other_copy._changes)
         
-        # Perform intersection using pandas merge
-        result_df = pd.merge(self._df, other_df, how='inner')
-        result_df = result_df.drop_duplicates()
+        # Perform intersection using pandas merge on all columns
+        common_cols = list(self._df.columns)
+        result_df = pd.merge(self._df, other_df, on=common_cols, how='inner')
+        result_df = result_df.drop_duplicates(keep='first').reset_index(drop=True)
         
         # Determine deterministic and reloadable flags
         if deep_copy:
@@ -943,31 +1104,46 @@ class Q:
             new_deterministic = False
             new_reloadable = False
         
-        # Return new Q with result (no change tracking needed, it's a terminal operation in a sense)
-        # Actually, we should track this for reproducibility. Let's use a simple filter.
-        # For now, create a new Q with the result
         return Q(result_df, deterministic=new_deterministic, reloadable=new_reloadable)
     
     def difference(self, other: 'Q', deep_copy: bool = True) -> 'Q':
         """Difference from another Q (rows in self but not in other).
         
-        Returns rows that appear in self but not in other. Columns must match.
+        Returns rows that appear in self but not in other. Requires both Q objects
+        to have identical columns (pure set operation).
         
         Args:
-            other: Another Q object to subtract (must have same columns)
+            other: Another Q object to subtract (must have identical columns)
             deep_copy: If True (default), stores a deep copy for full reproducibility.
                       If False, stores reference and marks as non-deterministic/non-reloadable.
                       
         Returns:
             A new Q object with rows in self but not in other
             
+        Raises:
+            ValueError: If column sets don't match exactly
+            
         Examples:
-            >>> q1 = Q(df1)  # [1, 2, 3]
-            >>> q2 = Q(df2)  # [2, 3, 4]
+            >>> q1 = Q(pd.DataFrame({'a': [1, 2, 3]}))
+            >>> q2 = Q(pd.DataFrame({'a': [2, 3, 4]}))
             >>> q3 = q1.difference(q2)  # [1]
+            
+            >>> # Align schemas first if columns differ
+            >>> q1 = q1.select('id', 'name')
+            >>> q2 = q2.select('id', 'name')
+            >>> q3 = q1.difference(q2)
             
         Deterministic: Yes (if both Q objects are deterministic and deep_copy=True)
         """
+        # Validate matching schemas (pure set operation requirement)
+        if set(self._df.columns) != set(other._df.columns):
+            raise ValueError(
+                f"Cannot perform difference - column mismatch.\n"
+                f"Left columns: {sorted(self._df.columns)}\n"
+                f"Right columns: {sorted(other._df.columns)}\n"
+                f"Hint: Use .select() to align schemas first."
+            )
+        
         # Get the other Q's DataFrame
         if other is self:
             # Self-difference is empty
@@ -980,10 +1156,11 @@ class Q:
         
         other_df = other_copy._apply_changes(other_copy._base_df, other_copy._changes)
         
-        # Perform difference using pandas merge with indicator
-        merged = pd.merge(self._df, other_df, how='outer', indicator=True)
+        # Perform difference using pandas merge with indicator on all columns
+        common_cols = list(self._df.columns)
+        merged = pd.merge(self._df, other_df, on=common_cols, how='outer', indicator=True)
         result_df = merged[merged['_merge'] == 'left_only'].drop('_merge', axis=1)
-        result_df = result_df.drop_duplicates()
+        result_df = result_df.drop_duplicates(keep='first').reset_index(drop=True)
         
         # Determine deterministic and reloadable flags
         if deep_copy:
