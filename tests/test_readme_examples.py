@@ -36,23 +36,23 @@ class TestReadmeExamples:
         
         # Single column
         q2 = q.extend(total=lambda x: x.price * x.qty)
-        assert list(q2.df['total']) == [20, 60]
+        assert list(q2.to_df()['total']) == [20, 60]
         
         # Multiple columns (referencing original columns)
         q3 = q.extend(
             total=lambda x: x.price * x.qty,
             discount=lambda x: x.price * 0.1
         )
-        assert 'total' in q3.df.columns
-        assert 'discount' in q3.df.columns
+        assert 'total' in q3.to_df().columns
+        assert 'discount' in q3.to_df().columns
         
         # Chain extensions (can reference previous extensions)
         q4 = (q
             .extend(revenue=lambda x: x.price * x.qty)
             .extend(cost=lambda x: x.revenue * 0.6)
             .extend(profit=lambda x: x.revenue - x.cost))
-        assert 'profit' in q4.df.columns
-        assert abs(q4.df.iloc[0]['profit'] - 8.0) < 0.01  # 20 * 0.4
+        assert 'profit' in q4.to_df().columns
+        assert abs(q4.to_df().iloc[0]['profit'] - 8.0) < 0.01  # 20 * 0.4
 
     def test_filtering_examples(self):
         """Filter examples from README."""
@@ -86,11 +86,11 @@ class TestReadmeExamples:
         # Top by revenue
         top3 = q.sort('revenue').head(3)
         assert len(top3) == 3
-        assert top3.df.iloc[0]['revenue'] == 400
+        assert top3.to_df().iloc[0]['revenue'] == 400
         
         # Sort ascending
         asc = q.sort('revenue', ascending=True)
-        assert asc.df.iloc[0]['revenue'] == 100
+        assert asc.to_df().iloc[0]['revenue'] == 100
 
     def test_transform_examples(self):
         """Transform examples from README."""
@@ -106,8 +106,8 @@ class TestReadmeExamples:
             'full_name': f"{x.first} {x.last}",
             'email': x.email
         })
-        assert list(q2.df.columns) == ['full_name', 'email']
-        assert q2.df.iloc[0]['full_name'] == 'Alice Smith'
+        assert list(q2.to_df().columns) == ['full_name', 'email']
+        assert q2.to_df().iloc[0]['full_name'] == 'Alice Smith'
 
     def test_groupby_examples(self):
         """Groupby examples from README."""
@@ -124,7 +124,7 @@ class TestReadmeExamples:
             count=lambda g: len(g)
         )
         
-        assert len(summary.df) == 2
+        assert len(summary.to_df()) == 2
         result_dict = {row.key: row.total_sales for row in summary}
         assert result_dict['East'] == 250
         assert result_dict['West'] == 450
@@ -143,9 +143,9 @@ class TestReadmeExamples:
         
         # Reload and re-apply
         q3 = q2.reload()
-        assert len(q3.df) == 2
-        assert 'commission' in q3.df.columns
-        assert q3.df.iloc[0]['commission'] == 22.5  # 150 * 0.15
+        assert len(q3.to_df()) == 2
+        assert 'commission' in q3.to_df().columns
+        assert q3.to_df().iloc[0]['commission'] == 22.5  # 150 * 0.15
 
     def test_column_visibility(self):
         """Hide/unhide examples from README."""
@@ -159,7 +159,7 @@ class TestReadmeExamples:
         
         # Hide internal columns
         q2 = q.hide('id', 'cost')
-        assert 'id' in q2.df.columns  # Still in data
+        assert 'id' in q2.to_df().columns  # Still in data
         display = str(q2)
         assert 'name' in display
         assert 'id' not in display
@@ -173,7 +173,7 @@ class TestReadmeExamples:
         
         # Hidden columns work in calculations
         q4 = q.hide('cost').extend(profit=lambda x: x.revenue - x.cost)
-        assert 'profit' in q4.df.columns
+        assert 'profit' in q4.to_df().columns
         assert 'cost' not in str(q4)
 
     def test_real_world_pipeline(self):
@@ -199,7 +199,7 @@ class TestReadmeExamples:
             .head(10))
         
         assert len(result) == 3
-        assert 'final' in result.df.columns
+        assert 'final' in result.to_df().columns
         assert 'internal_id' not in str(result)
 
     def test_performance_optimization(self):
@@ -219,7 +219,7 @@ class TestReadmeExamples:
         # Flatten
         q3 = q2.rebase()
         assert len(q3._changes) == 0
-        assert len(q3.df) == len(q2.df)
+        assert len(q3.to_df()) == len(q2.to_df())
         
         # Continue building
         q4 = q3.extend(d=lambda x: x.c / 2)
@@ -264,7 +264,7 @@ class TestReadmeExamples:
             .extend(region_clean=lambda x: x.region.strip().upper()))
         
         assert len(clean) == 1  # Only one row passes all filters
-        assert clean.df.iloc[0]['email'] == 'alice@example.com'
+        assert clean.to_df().iloc[0]['email'] == 'alice@example.com'
 
     def test_export(self, tmp_path):
         """Export example from README."""
@@ -324,13 +324,13 @@ class TestEdgeCases:
         q = Q(df)
         assert len(q) == 1
         q2 = q.extend(y=lambda x: x.x * 2)
-        assert q2.df.iloc[0]['y'] == 2
+        assert q2.to_df().iloc[0]['y'] == 2
 
     def test_many_columns(self):
         """Should handle DataFrames with many columns."""
         df = pd.DataFrame({f'col{i}': [i] for i in range(100)})
         q = Q(df)
-        assert len(q.df.columns) == 100
+        assert len(q.to_df().columns) == 100
 
     def test_filter_removes_all_rows(self):
         """Should handle filter that removes all rows."""
@@ -351,15 +351,15 @@ class TestEdgeCases:
         df = pd.DataFrame({'x': [1, 2, 3]})
         q = Q(df)
         q2 = q.transform(lambda x: x.x * 2)
-        assert list(q2.df.columns) == ['value']
-        assert list(q2.df['value']) == [2, 4, 6]
+        assert list(q2.to_df().columns) == ['value']
+        assert list(q2.to_df()['value']) == [2, 4, 6]
 
     def test_extend_chaining_references(self):
         """Extended columns can reference previous extensions via chaining."""
         df = pd.DataFrame({'x': [1, 2]})
         q = Q(df)
         q2 = q.extend(y=lambda x: x.x * 2).extend(z=lambda x: x.y + 10)
-        assert list(q2.df['z']) == [12, 14]
+        assert list(q2.to_df()['z']) == [12, 14]
 
     def test_sort_empty_cols(self):
         """Sort with no columns should sort by all columns."""
@@ -367,15 +367,29 @@ class TestEdgeCases:
         q = Q(df)
         q2 = q.sort()
         # Sorts by all columns descending
-        assert q2.df.iloc[0]['a'] == 3
+        assert q2.to_df().iloc[0]['a'] == 3
 
     def test_to_df_returns_dataframe(self):
-        """to_df should return the underlying DataFrame."""
+        """to_df should return a copy of the DataFrame."""
         df = pd.DataFrame({'x': [1, 2, 3]})
         q = Q(df)
         result = q.to_df()
         assert isinstance(result, pd.DataFrame)
         assert len(result) == 3
+
+    def test_to_df_returns_copy(self):
+        """to_df should return a copy that doesn't affect Q."""
+        df = pd.DataFrame({'x': [1, 2, 3]})
+        q = Q(df)
+        
+        # Get copy and mutate it
+        df_copy = q.to_df()
+        df_copy['new_col'] = [4, 5, 6]
+        df_copy['x'] = [10, 20, 30]
+        
+        # Q should be unchanged
+        assert 'new_col' not in q.columns
+        assert list(q.to_df()['x']) == [1, 2, 3]
 
     def test_show_returns_self(self, capsys):
         """show() should return self for chaining."""
@@ -417,8 +431,8 @@ class TestEdgeCases:
         df = pd.DataFrame({'x': [1, 2, 3]})
         q = Q(df)
         q2 = q.refresh()
-        assert len(q2.df) == len(q.df)
-        assert list(q2.df['x']) == list(q.df['x'])
+        assert len(q2.to_df()) == len(q.to_df())
+        assert list(q2.to_df()['x']) == list(q.to_df()['x'])
 
     def test_reload_adds_new_columns(self, tmp_path):
         """Reload should allow new columns in source."""
@@ -432,7 +446,7 @@ class TestEdgeCases:
         csv_file.write_text("x,y,z\n1,2,3\n")
         
         q2 = q.reload()
-        assert 'z' in q2.df.columns
+        assert 'z' in q2.to_df().columns
 
     def test_std_and_var(self):
         """Test standard deviation and variance."""

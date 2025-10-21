@@ -106,7 +106,7 @@ class Q:
         self._source_path = source_path
         self._skip_rows = skip_rows
         self._hidden_cols = hidden_cols or set()
-        self.df = df
+        self._df = df
     
     def _apply_changes(self, base: pd.DataFrame, changes: List[Tuple[str, Any]] = None) -> pd.DataFrame:
         """Apply tracked changes to a base DataFrame.
@@ -191,7 +191,7 @@ class Q:
             New Q instance
         """
         params = {
-            'df': self.df,
+            'df': self._df,
             'source_path': self._source_path,
             'skip_rows': self._skip_rows,
             'base_df': self._base_df,
@@ -204,9 +204,9 @@ class Q:
     def _display_df(self) -> pd.DataFrame:
         """Get DataFrame with hidden columns excluded for display."""
         if self._hidden_cols:
-            visible_cols = [c for c in self.df.columns if c not in self._hidden_cols]
-            return self.df[visible_cols]
-        return self.df
+            visible_cols = [c for c in self._df.columns if c not in self._hidden_cols]
+            return self._df[visible_cols]
+        return self._df
     
     def __repr__(self) -> str:
         """Return a string representation for the REPL."""
@@ -218,11 +218,11 @@ class Q:
     
     def __iter__(self):
         """Make Q iterable - iterates over rows as namedtuples."""
-        return iter(rows(self.df))
+        return iter(rows(self._df))
     
     def __len__(self) -> int:
         """Return the number of rows."""
-        return len(self.df)
+        return len(self._df)
     
     @property
     def columns(self) -> list:
@@ -237,7 +237,7 @@ class Q:
             >>> # Use in lambdas:
             >>> q.extend(total=lambda x: x.price * x.qty)
         """
-        return self.df.columns.tolist()
+        return self._df.columns.tolist()
     
     @property
     def cols(self) -> list:
@@ -247,6 +247,21 @@ class Q:
             List of column names (includes hidden columns)
         """
         return self.columns
+    
+    @property
+    def rows(self) -> int:
+        """Return the number of rows in the DataFrame.
+        
+        Returns:
+            Number of rows (same as len(q))
+            
+        Example:
+            >>> q.rows
+            1523
+            >>> print(f"{q.rows} rows × {len(q.columns)} columns")
+            1523 rows × 4 columns
+        """
+        return len(self._df)
     
     def extend(self, **newcols) -> 'Q':
         """Add new columns to the DataFrame based on existing columns.
@@ -322,7 +337,7 @@ class Q:
             ...           count=lambda g: len(g))
         """
         buckets = defaultdict(list)
-        for r in rows(self.df):
+        for r in rows(self._df):
             buckets[keyfn(r)].append(r)
         out = []
         for k, grp in buckets.items():
@@ -421,12 +436,20 @@ class Q:
         return self
     
     def to_df(self) -> pd.DataFrame:
-        """Return the underlying pandas DataFrame.
+        """Return a copy of the underlying pandas DataFrame.
+        
+        Returns a deep copy to preserve Q's immutability. External modifications
+        to the returned DataFrame will not affect this Q object.
         
         Returns:
-            The current state DataFrame
+            A deep copy of the current state DataFrame
+            
+        Example:
+            >>> df_copy = q.to_df()
+            >>> df_copy['new_col'] = 1  # Does not affect q
+            >>> q.to_df().groupby('category').sum()  # Use pandas directly
         """
-        return self.df
+        return self._df.copy()
     
     def dump(self, filename: str) -> 'Q':
         """Write the DataFrame to a CSV file (writes all columns, including hidden ones).
@@ -437,8 +460,8 @@ class Q:
         Returns:
             Self for method chaining
         """
-        self.df.to_csv(filename, index=False)
-        print(f"Wrote {len(self.df)} rows to {filename}")
+        self._df.to_csv(filename, index=False)
+        print(f"Wrote {len(self._df)} rows to {filename}")
         return self
     
     def hide(self, *cols) -> 'Q':
@@ -554,10 +577,10 @@ class Q:
             >>> q3 = q2.rebase()  # Flattens: current state becomes new base
         """
         return Q(
-            df=self.df.copy(),
+            df=self._df.copy(),
             source_path=self._source_path,
             skip_rows=self._skip_rows,
-            base_df=self.df.copy(),
+            base_df=self._df.copy(),
             changes=[],
             hidden_cols=self._hidden_cols.copy()
         )
@@ -573,7 +596,7 @@ class Q:
         Returns:
             Sum of the column
         """
-        return self.df[col].sum()
+        return self._df[col].sum()
     
     def mean(self, col: str) -> float:
         """Compute mean of a column.
@@ -584,7 +607,7 @@ class Q:
         Returns:
             Mean of the column
         """
-        return self.df[col].mean()
+        return self._df[col].mean()
     
     def median(self, col: str) -> float:
         """Compute median of a column.
@@ -595,7 +618,7 @@ class Q:
         Returns:
             Median of the column
         """
-        return self.df[col].median()
+        return self._df[col].median()
     
     def min(self, col: str):
         """Compute minimum of a column.
@@ -606,7 +629,7 @@ class Q:
         Returns:
             Minimum value in the column
         """
-        return self.df[col].min()
+        return self._df[col].min()
     
     def max(self, col: str):
         """Compute maximum of a column.
@@ -617,7 +640,7 @@ class Q:
         Returns:
             Maximum value in the column
         """
-        return self.df[col].max()
+        return self._df[col].max()
     
     def count(self, col: str = None) -> int:
         """Count non-null values in a column, or total rows if no column specified.
@@ -629,8 +652,8 @@ class Q:
             Count of non-null values or total rows
         """
         if col:
-            return self.df[col].count()
-        return len(self.df)
+            return self._df[col].count()
+        return len(self._df)
     
     def std(self, col: str) -> float:
         """Compute standard deviation of a column.
@@ -641,7 +664,7 @@ class Q:
         Returns:
             Standard deviation of the column
         """
-        return self.df[col].std()
+        return self._df[col].std()
     
     def var(self, col: str) -> float:
         """Compute variance of a column.
@@ -652,7 +675,7 @@ class Q:
         Returns:
             Variance of the column
         """
-        return self.df[col].var()
+        return self._df[col].var()
     
     def unique(self, col: str) -> list:
         """Get unique values in a column.
@@ -663,7 +686,7 @@ class Q:
         Returns:
             List of unique values
         """
-        return self.df[col].unique().tolist()
+        return self._df[col].unique().tolist()
     
     def nunique(self, col: str) -> int:
         """Count unique values in a column.
@@ -674,7 +697,7 @@ class Q:
         Returns:
             Number of unique values
         """
-        return self.df[col].nunique()
+        return self._df[col].nunique()
     
     def memory_usage(self, deep: bool = True) -> dict:
         """Get memory usage breakdown for this Q object.
@@ -695,7 +718,7 @@ class Q:
             >>> usage = q2.memory_usage()
             >>> print(f"Using {usage['total_mb']:.2f} MB")
         """
-        current_mem = self.df.memory_usage(deep=deep).sum()
+        current_mem = self._df.memory_usage(deep=deep).sum()
         base_mem = self._base_df.memory_usage(deep=deep).sum()
         
         # Estimate changes overhead (rough approximation)

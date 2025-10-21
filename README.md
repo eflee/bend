@@ -54,9 +54,14 @@ $ bend sales.csv
 # View first rows
 q
 
-# Check available columns
+# Check available columns and row count
 q.columns            # ['customer', 'amount', 'age', 'region']
 q.cols               # Alias for q.columns
+q.rows               # 100
+len(q)               # 100 (same as q.rows)
+
+# Quick dataset summary
+print(f"{q.rows} rows × {len(q.columns)} columns")
 
 # Iterate through data
 for row in q:

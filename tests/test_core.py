@@ -57,7 +57,7 @@ class TestQBasics:
         df = pd.DataFrame({"x": [1, 2, 3]})
         q = Q(df)
         assert len(q) == 3
-        assert list(q.df.columns) == ["x"]
+        assert list(q.to_df().columns) == ["x"]
 
     def test_repr_and_str(self):
         """Should have string representation."""
@@ -98,6 +98,25 @@ class TestQBasics:
         q = Q(df).hide("b")
         assert q.columns == ["a", "b", "c"]
 
+    def test_rows_property(self):
+        """Should return number of rows."""
+        df = pd.DataFrame({"x": range(100)})
+        q = Q(df)
+        assert q.rows == 100
+
+    def test_rows_equals_len(self):
+        """rows property should equal len()."""
+        df = pd.DataFrame({"a": [1, 2, 3, 4, 5]})
+        q = Q(df)
+        assert q.rows == len(q)
+
+    def test_rows_updates_after_filter(self):
+        """rows should update after filtering."""
+        df = pd.DataFrame({"x": range(10)})
+        q = Q(df)
+        q2 = q.filter(lambda x: x.x < 5)
+        assert q2.rows == 5
+
 
 class TestQExtend:
     """Tests for Q.extend() method."""
@@ -108,9 +127,9 @@ class TestQExtend:
         q = Q(df)
         q2 = q.extend(total=lambda x: x.price * x.qty)
         
-        assert "total" in q2.df.columns
-        assert list(q2.df["total"]) == [20, 60]
-        assert "price" in q2.df.columns  # Original preserved
+        assert "total" in q2.to_df().columns
+        assert list(q2.to_df()["total"]) == [20, 60]
+        assert "price" in q2.to_df().columns  # Original preserved
 
     def test_extend_multiple_columns(self):
         """Should add multiple computed columns."""
@@ -118,10 +137,10 @@ class TestQExtend:
         q = Q(df)
         q2 = q.extend(double=lambda x: x.x * 2, triple=lambda x: x.x * 3)
         
-        assert "double" in q2.df.columns
-        assert "triple" in q2.df.columns
-        assert list(q2.df["double"]) == [2, 4]
-        assert list(q2.df["triple"]) == [3, 6]
+        assert "double" in q2.to_df().columns
+        assert "triple" in q2.to_df().columns
+        assert list(q2.to_df()["double"]) == [2, 4]
+        assert list(q2.to_df()["triple"]) == [3, 6]
 
     def test_extend_chained(self):
         """Should allow chained extends."""
@@ -130,9 +149,9 @@ class TestQExtend:
         q2 = q.extend(total=lambda x: x.price * x.qty)
         q3 = q2.extend(tax=lambda x: x.total * 0.1)
         
-        assert "total" in q3.df.columns
-        assert "tax" in q3.df.columns
-        assert list(q3.df["tax"]) == [2.0, 6.0]
+        assert "total" in q3.to_df().columns
+        assert "tax" in q3.to_df().columns
+        assert list(q3.to_df()["tax"]) == [2.0, 6.0]
 
     def test_extend_tracks_changes(self):
         """Should track extends in change history."""
@@ -153,8 +172,8 @@ class TestQTransform:
         q = Q(df)
         q2 = q.transform(lambda x: {"full_name": f"{x.first} {x.last}"})
         
-        assert list(q2.df.columns) == ["full_name"]
-        assert list(q2.df["full_name"]) == ["Alice Smith", "Bob Jones"]
+        assert list(q2.to_df().columns) == ["full_name"]
+        assert list(q2.to_df()["full_name"]) == ["Alice Smith", "Bob Jones"]
 
     def test_transform_tuple(self):
         """Should transform rows with tuple output."""
@@ -162,8 +181,8 @@ class TestQTransform:
         q = Q(df)
         q2 = q.transform(lambda x: (x.x + x.y, x.x * x.y))
         
-        assert list(q2.df.columns) == ["c0", "c1"]
-        assert list(q2.df["c0"]) == [4, 6]
+        assert list(q2.to_df().columns) == ["c0", "c1"]
+        assert list(q2.to_df()["c0"]) == [4, 6]
 
     def test_transform_tracks_changes(self):
         """Should track transform in change history."""
@@ -185,7 +204,7 @@ class TestQFilter:
         q2 = q.filter(lambda x: x.x > 2)
         
         assert len(q2) == 3
-        assert list(q2.df["x"]) == [3, 4, 5]
+        assert list(q2.to_df()["x"]) == [3, 4, 5]
 
     def test_filter_preserves_columns(self):
         """Should preserve all columns."""
@@ -193,7 +212,7 @@ class TestQFilter:
         q = Q(df)
         q2 = q.filter(lambda x: x.age >= 30)
         
-        assert list(q2.df.columns) == ["name", "age"]
+        assert list(q2.to_df().columns) == ["name", "age"]
         assert len(q2) == 2
 
     def test_filter_exception_handling(self):
@@ -203,7 +222,7 @@ class TestQFilter:
         q2 = q.filter(lambda x: int(x.value) > 15)
         
         assert len(q2) == 1
-        assert q2.df.iloc[0]["value"] == "20"
+        assert q2.to_df().iloc[0]["value"] == "20"
 
     def test_filter_tracks_changes(self):
         """Should track filter in change history."""
@@ -224,7 +243,7 @@ class TestQSortHead:
         q = Q(df)
         q2 = q.sort("x", ascending=True)
         
-        assert list(q2.df["x"]) == [1, 2, 3]
+        assert list(q2.to_df()["x"]) == [1, 2, 3]
 
     def test_sort_descending(self):
         """Should sort in descending order (default)."""
@@ -232,7 +251,7 @@ class TestQSortHead:
         q = Q(df)
         q2 = q.sort("x")
         
-        assert list(q2.df["x"]) == [3, 2, 1]
+        assert list(q2.to_df()["x"]) == [3, 2, 1]
 
     def test_head(self):
         """Should return first n rows."""
@@ -241,7 +260,7 @@ class TestQSortHead:
         q2 = q.head(3)
         
         assert len(q2) == 3
-        assert list(q2.df["x"]) == [0, 1, 2]
+        assert list(q2.to_df()["x"]) == [0, 1, 2]
 
     def test_sort_head_chain(self):
         """Should chain sort and head."""
@@ -249,7 +268,7 @@ class TestQSortHead:
         q = Q(df)
         q2 = q.sort("x", ascending=True).head(3)
         
-        assert list(q2.df["x"]) == [1, 1, 3]
+        assert list(q2.to_df()["x"]) == [1, 1, 3]
 
 
 class TestQRefreshReload:
@@ -266,7 +285,7 @@ class TestQRefreshReload:
         # Refresh should give same result
         q3 = q2.refresh()
         assert len(q3) == 2
-        assert list(q3.df["y"]) == [4, 6]
+        assert list(q3.to_df()["y"]) == [4, 6]
 
     def test_reload_from_file(self, tmp_path):
         """Should reload from file and re-apply changes."""
@@ -283,7 +302,7 @@ class TestQRefreshReload:
         # Reload
         q3 = q2.reload()
         assert len(q3) == 2
-        assert list(q3.df["total"]) == [60, 125]
+        assert list(q3.to_df()["total"]) == [60, 125]
 
     def test_reload_validates_columns(self, tmp_path):
         """Should raise error if required columns missing."""
@@ -330,8 +349,8 @@ class TestQRebase:
         q3 = q2.rebase()
         
         assert len(q3) == len(q2)
-        assert list(q3.df.columns) == list(q2.df.columns)
-        assert list(q3.df["y"]) == list(q2.df["y"])
+        assert list(q3.to_df().columns) == list(q2.to_df().columns)
+        assert list(q3.to_df()["y"]) == list(q2.to_df()["y"])
 
 
 class TestQAggregations:
@@ -386,9 +405,9 @@ class TestQDropSelect:
         q = Q(df)
         q2 = q.drop("b")
         
-        assert "a" in q2.df.columns
-        assert "c" in q2.df.columns
-        assert "b" not in q2.df.columns
+        assert "a" in q2.to_df().columns
+        assert "c" in q2.to_df().columns
+        assert "b" not in q2.to_df().columns
         assert len(q2._changes) == 1
         assert q2._changes[0][0] == "drop"
 
@@ -398,7 +417,7 @@ class TestQDropSelect:
         q = Q(df)
         q2 = q.drop("b", "d")
         
-        assert list(q2.df.columns) == ["a", "c"]
+        assert list(q2.to_df().columns) == ["a", "c"]
 
     def test_drop_nonexistent_column(self):
         """Should handle dropping nonexistent columns gracefully."""
@@ -406,8 +425,8 @@ class TestQDropSelect:
         q = Q(df)
         q2 = q.drop("a", "nonexistent")
         
-        assert "b" in q2.df.columns
-        assert "a" not in q2.df.columns
+        assert "b" in q2.to_df().columns
+        assert "a" not in q2.to_df().columns
 
     def test_drop_prevents_column_use(self):
         """Dropped columns cannot be used in subsequent operations."""
@@ -430,7 +449,7 @@ class TestQDropSelect:
         q = Q(df)
         q2 = q.select("a", "c")
         
-        assert list(q2.df.columns) == ["a", "c"]
+        assert list(q2.to_df().columns) == ["a", "c"]
         assert len(q2._changes) == 1
         assert q2._changes[0][0] == "select"
 
@@ -440,7 +459,7 @@ class TestQDropSelect:
         q = Q(df)
         q2 = q.select("a")
         
-        assert list(q2.df.columns) == ["a"]
+        assert list(q2.to_df().columns) == ["a"]
 
     def test_select_nonexistent_column(self):
         """Should handle selecting nonexistent columns gracefully."""
@@ -448,7 +467,7 @@ class TestQDropSelect:
         q = Q(df)
         q2 = q.select("a", "nonexistent")
         
-        assert list(q2.df.columns) == ["a"]
+        assert list(q2.to_df().columns) == ["a"]
 
     def test_select_is_inverse_of_drop(self):
         """Select('a', 'b') should be equivalent to dropping everything except a and b."""
@@ -458,7 +477,7 @@ class TestQDropSelect:
         selected = q.select("a", "b")
         dropped = q.drop("c", "d")
         
-        assert list(selected.df.columns) == list(dropped.df.columns)
+        assert list(selected.to_df().columns) == list(dropped.to_df().columns)
 
     def test_drop_and_select_with_replay(self):
         """Drop and select should work with refresh/reload."""
@@ -466,13 +485,13 @@ class TestQDropSelect:
         q = Q(df)
         q2 = q.drop("b").extend(total=lambda x: x.a + x.c)
         
-        assert "total" in q2.df.columns
-        assert "b" not in q2.df.columns
+        assert "total" in q2.to_df().columns
+        assert "b" not in q2.to_df().columns
         
         # Refresh should re-apply drop and extend
         q3 = q2.refresh()
-        assert "total" in q3.df.columns
-        assert "b" not in q3.df.columns
+        assert "total" in q3.to_df().columns
+        assert "b" not in q3.to_df().columns
 
 
 class TestQHideUnhide:
@@ -485,7 +504,7 @@ class TestQHideUnhide:
         q2 = q.hide("b")
         
         # Column exists in data
-        assert "b" in q2.df.columns
+        assert "b" in q2.to_df().columns
         
         # But not in display
         display = str(q2)
@@ -534,7 +553,7 @@ class TestQIntegration:
                   .head(2))
         
         assert len(result) == 2
-        assert result.df.iloc[0]["name"] == "Charlie"
+        assert result.to_df().iloc[0]["name"] == "Charlie"
 
     def test_change_history_preserved(self):
         """Should preserve complete change history."""

@@ -51,13 +51,13 @@ def main():
 
     banner = (
         "Loaded as:\n"
-        "  df  -> pandas.DataFrame (base data)\n"
-        "  q   -> Q(df)  # tracked change history + current state\n"
-        "  r   -> list of Row namedtuples (dot access)\n"
+        "  q   -> Q object with tracked change history\n"
+        "  df  -> pandas.DataFrame (for pandas compatibility)\n"
         "Helpers:\n"
         "  rows(df), load_csv(url), reload(), refresh()\n"
         "\n"
         "Examples:\n"
+        "  q.columns, q.rows  # discover shape\n"
         "  q.extend(total=lambda x: x.price * x.qty)  # add computed columns\n"
         "  q.filter(lambda x: x.region == 'CA')  # filter rows\n"
         "  q.transform(lambda x: {'name': x.first + ' ' + x.last})  # reshape\n"
@@ -65,7 +65,7 @@ def main():
         "  q = reload()  # reload from source, re-apply all changes\n"
         "  q = refresh()  # re-apply changes to base (no file reload)\n"
         "  q = q.rebase()  # flatten: make current state the new base\n"
-        "  q.sum('price'), q.mean('age')  # aggregations\n"
+        "  q.to_df()  # get DataFrame copy for pandas operations\n"
         "  for row in q: print(row.name)  # iterate over rows\n"
         "  q.dump('out.csv')  # write to CSV\n"
     )
