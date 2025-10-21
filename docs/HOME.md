@@ -2,10 +2,6 @@
 
 Complete reference for all Bend REPL capabilities.
 
-## 📘 Core Concepts
-
-**[Understanding Determinism & Reloadability](concepts/understanding-determinism-reloadability.md)** - Essential reading for understanding how Bend tracks pipeline properties and what guarantees you have about reproducibility.
-
 ## Quick Start
 
 ```python
@@ -27,17 +23,13 @@ result.dump('output.csv')
 
 ## Documentation Categories
 
-### 📘 [Core Concepts](concepts/)
-Fundamental concepts for understanding Bend:
-- [Understanding Determinism & Reloadability](concepts/understanding-determinism-reloadability.md) - Replayability, reloadability, and determinism explained
-
-### 🔧 [Data Manipulation](data-manipulation/)
+### 🔧 [Data Manipulation](data-manipulation/README.md)
 Core operations for transforming your data:
 - [`assign()`](data-manipulation/assign.md) - Add computed columns
 - [`filter()`](data-manipulation/filter.md) - Filter rows by condition
 - [`map()`](data-manipulation/map.md) - Restructure rows completely
 
-### 🔗 [Multi-Q Operations](multi-q-operations/)
+### 🔗 [Multi-Q Operations](multi-q-operations/README.md)
 Combining multiple Q objects:
 - [`merge()`](multi-q-operations/merge.md) - Join with conflict resolution
 - [`join()`](multi-q-operations/join.md) - Simple join wrapper
@@ -46,7 +38,7 @@ Combining multiple Q objects:
 - [`intersect()`](multi-q-operations/intersect.md) - Rows in both
 - [`difference()`](multi-q-operations/difference.md) - Rows in self but not other
 
-### 📊 [Column Operations](column-operations/)
+### 📊 [Column Operations](column-operations/README.md)
 Managing columns:
 - [`drop()`](column-operations/drop.md) - Remove columns (structural)
 - [`select()`](column-operations/select.md) - Keep only specified columns
@@ -54,7 +46,7 @@ Managing columns:
 - [`hide()`](column-operations/hide.md) - Hide from display only
 - [`unhide()`](column-operations/unhide.md) - Unhide columns
 
-### 📏 [Row Operations](row-operations/)
+### 📏 [Row Operations](row-operations/README.md)
 Selecting and ordering rows:
 - [`head()`](row-operations/head.md) - First n rows
 - [`tail()`](row-operations/tail.md) - Last n rows
@@ -62,30 +54,32 @@ Selecting and ordering rows:
 - [`sort()`](row-operations/sort.md) - Sort by columns
 - [`distinct()`](row-operations/distinct.md) - Remove duplicates
 
-### 📈 [Aggregations](aggregations/)
+### 📈 [Aggregations](aggregations/README.md)
 Computing summary statistics:
 - [All Aggregations](aggregations/aggregations.md) - Quick reference
 - [`groupby()`](aggregations/groupby.md) - Group and aggregate
 - Individual methods: `sum()`, `mean()`, `median()`, `min()`, `max()`, `count()`, `std()`, `var()`, `unique()`, `nunique()`
 
-### 🔄 [Lifecycle](lifecycle/)
+### 🔄 [Lifecycle](lifecycle/README.md)
 Managing Q state and history:
 - [`reload()`](lifecycle/reload.md) - Reload from disk (deep/recursive)
-- [`replay()`](lifecycle/refresh.md) - Re-apply changes from memory
+- [`replay()`](lifecycle/replay.md) - Re-apply changes from memory
 - [`rebase()`](lifecycle/rebase.md) - Flatten history
 - [`memory_usage()`](lifecycle/memory_usage.md) - Memory breakdown
 
-### 📤 [Output](output/)
+### 📤 [Output](output/README.md)
 Exporting and displaying data:
 - [`show()`](output/show.md) - Print preview
 - [`to_df()`](output/to_df.md) - Export to pandas DataFrame
 - [`dump()`](output/dump.md) - Export to CSV
 
-### 🏷️ [Properties](properties/)
+### 🏷️ [Properties](properties/properties.md)
 Read-only attributes:
 - [All Properties](properties/properties.md) - `columns`, `cols`, `rows`, `deterministic`
 
 ## Key Concepts
+
+**[📘 Concepts](concepts/README.md)** - In-depth guides on determinism, reloadability, and other core concepts
 
 ### Immutability
 All operations return a **new Q object**. Original is never modified:
@@ -259,7 +253,7 @@ Check `q.deterministic`. Use `random_state` in `sample()` and `deep_copy=True` i
 
 - [Main README](../README.md) - Project overview and installation
 - [TODO](../TODO.md) - Roadmap and future features
-- [Phase 2 Gotchas](../PHASE2_GOTCHAS.md) - Design decisions for multi-Q operations
+- [Understanding Determinism & Reloadability](concepts/understanding-determinism-reloadability.md) - Core concepts guide
 
 ## Philosophy
 

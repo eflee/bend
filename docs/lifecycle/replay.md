@@ -1,4 +1,4 @@
-# refresh()
+# replay()
 
 Re-apply all tracked changes to the in-memory base DataFrame.
 
@@ -46,7 +46,7 @@ q._df['new_col'] = 123  # Manual mutation (bad!)
 q = q.replay()  # Back to correct state
 ```
 
-## refresh() vs reload()
+## replay() vs reload()
 
 | `replay()` | `reload()` |
 |-------------|------------|

@@ -85,5 +85,5 @@ flat = result.rebase()  # No lambdas in history
 
 ## See Also
 
-- [`reload()`](reload.md), [`replay()`](refresh.md)
+- [`reload()`](reload.md), [`replay()`](replay.md)
 - [`memory_usage()`](memory_usage.md)

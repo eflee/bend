@@ -136,5 +136,5 @@ q2 = q.replay()
 
 ## See Also
 
-- [`replay()`](refresh.md) - Re-apply changes without disk reload
+- [`replay()`](replay.md) - Re-apply changes without disk reload
 - [`rebase()`](rebase.md) - Flatten history

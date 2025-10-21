@@ -13,7 +13,7 @@ Reload from source files (deep/recursive).
 q.reload()  # Reloads CSV and replays all changes
 ```
 
-### [refresh()](refresh.md)
+### [replay()](replay.md)
 Re-apply changes to in-memory base.
 
 **When to use**: Verify idempotency, reset after manual changes

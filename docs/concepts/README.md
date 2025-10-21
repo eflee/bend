@@ -1,4 +1,4 @@
-# Core Concepts
+# Concepts
 
 This section covers fundamental concepts in Bend that help you understand how the tool works and what guarantees it provides.
 

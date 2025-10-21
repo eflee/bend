@@ -107,6 +107,6 @@ if not q.deterministic:
 
 ## See Also
 
-- [`sample()`](sample.md) - Non-deterministic by default
-- [`merge()`](merge.md), [`concat()`](concat.md) - `deep_copy=False` makes non-deterministic
-- [`reload()`](reload.md), [`replay()`](refresh.md) - Replay operations
+- [`sample()`](../row-operations/sample.md) - Non-deterministic by default
+- [`merge()`](../multi-q-operations/merge.md), [`concat()`](../multi-q-operations/concat.md) - `deep_copy=False` makes non-deterministic
+- [`reload()`](../lifecycle/reload.md), [`replay()`](../lifecycle/replay.md) - Replay operations
