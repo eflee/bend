@@ -225,6 +225,105 @@ q = session['q']
 - Could be combined with or depend on `q.save()` / `Q.load()`
 - Consider interaction with `reload()` functionality
 
+### Phase 7: History Visualization
+**Goal**: Provide clear visualization of change history tree
+
+**Use Case:**
+- Understand complex pipelines with multi-Q operations
+- Debug unexpected behavior by inspecting operation sequence
+- Document analysis workflow for team members
+- Verify which operations broke determinism/reloadability
+
+**Potential Features:**
+- [ ] `show_history()` or `history()` - Tree-style ASCII visualization
+- [ ] Verbose mode - Show lambda bodies and detailed parameters
+- [ ] Compact mode - Just operation names and counts
+- [ ] Color coding - Green (deterministic), yellow (non-deterministic), red (breaks reloadability)
+- [ ] Metadata header - Operation count, flags, memory usage
+- [ ] Smart truncation - Handle deeply nested trees and long parameters
+- [ ] Max depth control - Limit recursion for very deep trees
+
+**Visualization Style (Recommended):**
+```
+Q Pipeline (5 operations, deterministic: True, reloadable: True)
+├─ assign(total=<lambda>)
+├─ filter(<lambda>)
+├─ merge(on='id', how='inner')
+│  └─ Q(source: orders.csv)
+│     ├─ filter(<lambda>)
+│     └─ assign(discount=<lambda>)
+├─ filter(<lambda>)
+└─ rebase()
+```
+
+**API Design:**
+```python
+# Default: Tree with operation summaries
+q.show_history()
+# or
+q.history()
+
+# Verbose: Show lambda bodies and full parameters
+q.show_history(verbose=True)
+
+# Compact: Just operation names
+q.show_history(compact=True)
+
+# Limit depth for very nested trees
+q.show_history(max_depth=2)
+
+# Returns self for chaining
+q.show_history().show()
+```
+
+**Implementation Considerations:**
+1. **Tree Rendering**:
+   - Use box-drawing characters (├─, └─, │)
+   - Handle both linear chains and branching (multi-Q ops)
+   - Proper indentation for nested Qs
+
+2. **Information Display**:
+   - Operation type (assign, filter, merge, etc.)
+   - Key parameters (column names, conditions, merge keys)
+   - Lambda representations (show source if available)
+   - Referenced Q summaries (source path, operation count)
+
+3. **Smart Truncation**:
+   - Truncate long column lists: `assign(total, tax, ...3 more)`
+   - Collapse very deep trees: `└─ Q(... 5 more operations)`
+   - Show abbreviated lambda: `filter(lambda x: x.age >...)`
+
+4. **Color Coding** (optional, if terminal supports):
+   - Green: Deterministic operations
+   - Yellow: Non-deterministic (sample without seed, deep_copy=False)
+   - Red: Operations that broke reloadability (rebase)
+   - Use fallback symbols for no-color terminals: ✓, ⚠, ✗
+
+5. **Metadata**:
+   - Show at top: operation count, deterministic flag, reloadable flag
+   - Optional: memory usage, source paths
+   - Mark non-deterministic/non-reloadable operations inline
+
+**Challenges:**
+- Lambda inspection is limited (may not get source code)
+- Deep trees can be overwhelming (need good truncation)
+- Terminal width constraints
+- Circular references (self-merge edge case)
+- Performance with very long histories
+
+**Priority:** Low-Medium - Very useful for debugging but not essential for core functionality
+
+**Alternative Approaches:**
+- Export to GraphViz DOT format for complex visualizations
+- Integration with `rich` library for interactive expandable trees
+- JSON export for programmatic inspection
+- HTML output for notebooks/reports
+
+**Related:**
+- Complements existing `q._changes` internal representation
+- Could be used in error messages to show "at this point in history..."
+- Useful for documentation and tutorials
+
 ## Design Principles to Maintain
 
 **Must preserve (P0 Requirements):**
