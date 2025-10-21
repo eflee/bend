@@ -85,15 +85,27 @@ q.assign(full_name=lambda x: f"{x.first} {x.last}")
 
 ### Reproducibility Tracking
 
-Bend tracks whether your pipeline is deterministic:
+Bend tracks whether your pipeline is deterministic and reloadable:
 
 ```python
-q2 = q.sample(100)  # Non-deterministic
-print(q2.deterministic)  # False
+q = Q(load_csv('data.csv'), source_path='data.csv')
 
-q3 = q.sample(100, random_state=42)  # Deterministic
-print(q3.deterministic)  # True
+# Check properties
+print(q.deterministic)  # True - all ops are deterministic
+print(q.reloadable)     # True - has source path
+
+# Non-deterministic operation
+q2 = q.sample(100)  # No random_state
+print(q2.deterministic)  # False - random sampling
+print(q2.reloadable)     # True - still has source
+
+# Deterministic sampling
+q3 = q.sample(100, random_state=42)
+print(q3.deterministic)  # True - seeded random
+print(q3.reloadable)     # True - can reload
 ```
+
+**Learn more**: See [Understanding Determinism & Reloadability](docs/understanding-determinism-reloadability.md) for a comprehensive guide.
 
 ## Basic Examples
 

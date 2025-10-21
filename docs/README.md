@@ -2,6 +2,10 @@
 
 Complete reference for all Bend REPL capabilities.
 
+## 📘 Core Concepts
+
+**[Understanding Determinism & Reloadability](understanding-determinism-reloadability.md)** - Essential reading for understanding how Bend tracks pipeline properties and what guarantees you have about reproducibility.
+
 ## Quick Start
 
 ```python

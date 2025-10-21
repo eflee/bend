@@ -156,7 +156,74 @@ Implemented with **deep copy by default** approach:
 
 ### Phase 5: Nice to Have
 - [ ] `bin(col, bins, labels)` - Categorization helper
-- [ ] `q.save()` / `Q.load()` - Serialization with dill
+
+### Phase 6: Session Management
+**Goal**: Allow users to save and resume working sessions
+
+**Use Cases:**
+- Save analysis state at end of day, resume tomorrow
+- Share working sessions with team members
+- Create checkpoints during long analysis
+- Archive completed analyses with full context
+
+**Potential Features:**
+- [ ] `save_session(filename)` - Save entire Q object with history
+- [ ] `load_session(filename)` - Restore Q object from disk
+- [ ] Session metadata (creation time, bend version, data sources)
+- [ ] Handle lambda serialization (requires `dill` or similar)
+- [ ] Save/restore REPL namespace (optional)
+- [ ] Session versioning for backwards compatibility
+
+**Design Considerations:**
+1. **Serialization Method**:
+   - Use `dill` for lambda support
+   - Fall back to `pickle` for simple cases
+   - Consider JSON for metadata
+
+2. **What to Save**:
+   - Q object with full change history
+   - Source file paths (for reload capability)
+   - deterministic/reloadable flags
+   - REPL variables (optional)
+   - Metadata (timestamp, bend version)
+
+3. **Compatibility**:
+   - Handle version differences gracefully
+   - Document what can/can't be serialized
+   - Provide migration path for old sessions
+
+4. **Security**:
+   - Warn about executing untrusted session files
+   - Sanitize paths before reload
+   - Consider signing sessions
+
+**Implementation Sketch:**
+```python
+# Save session
+q.save_session('analysis.bend')
+# or
+save_session('analysis.bend', q=q, other_var=other_q)
+
+# Load session
+q = load_session('analysis.bend')
+# or
+session = load_session('analysis.bend')  # Returns dict
+q = session['q']
+```
+
+**Challenges:**
+- Lambda serialization requires `dill` (not standard library)
+- Source files may move between sessions
+- REPL state is complex to capture
+- Version compatibility across bend updates
+- Large datasets may create huge session files
+
+**Priority:** Medium - Useful for longer analyses but not critical for basic use
+
+**Related:**
+- Overlaps with existing serialization work (Phase 5 in current plan)
+- Could be combined with or depend on `q.save()` / `Q.load()`
+- Consider interaction with `reload()` functionality
 
 ## Design Principles to Maintain
 

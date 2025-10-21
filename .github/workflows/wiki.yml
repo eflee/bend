@@ -8,7 +8,7 @@ on:
       - 'docs/**'
       - '.github/workflows/wiki.yml'
 
-permissions:
+permissions:  
   contents: write
 
 jobs:
