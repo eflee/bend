@@ -12,8 +12,19 @@ pip install -e .
 
 ## Quick Start
 
+Launch an interactive REPL with your CSV data:
+
 ```bash
 bend data.csv
+```
+
+Or start with no data and load your own:
+
+```bash
+bend
+# Then in the REPL:
+df = load_csv('data.csv')
+q = Q(df)
 ```
 
 You'll get an interactive REPL with your data loaded as `q`.
@@ -72,6 +83,26 @@ q.sum('amount')      # 15750
 q.mean('age')        # 34.5
 q.count()            # 100 rows
 q.nunique('region')  # 4 unique regions
+```
+
+### Type Conversion
+
+CSV files load columns as strings by default. Use `dtype` to convert columns on load:
+
+```python
+# In the REPL or in Python code
+from bend.core import load_csv, Q
+
+# Convert columns to specific types
+df = load_csv('sales.csv', dtype={'age': int, 'price': float, 'active': bool})
+q = Q(df)
+
+# Or when using the CLI with --skip-rows
+bend sales.csv --skip-rows 2  # Skip first 2 rows
+
+# Type conversion in the REPL
+df = load_csv('data.csv', dtype={'year': int, 'revenue': float})
+q = Q(df)
 ```
 
 ### Adding Computed Columns

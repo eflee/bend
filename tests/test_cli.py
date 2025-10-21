@@ -8,13 +8,19 @@ import pytest
 class TestCLI:
     """Tests for CLI main function."""
 
-    def test_no_arguments_exits(self):
-        """Should exit with error when no CSV file provided."""
+    @patch('IPython.start_ipython')
+    def test_no_arguments_launches_repl(self, mock_ipython):
+        """Should launch REPL with no data loaded when no CSV file provided."""
         with patch.object(sys, 'argv', ['bend']):
-            with pytest.raises(SystemExit) as exc_info:
-                from bend.cli import main
-                main()
-            assert exc_info.value.code != 0
+            from bend.cli import main
+            main()
+        
+        # Should launch IPython with None for df, q, r
+        mock_ipython.assert_called_once()
+        call_kwargs = mock_ipython.call_args[1]
+        assert call_kwargs['user_ns']['df'] is None
+        assert call_kwargs['user_ns']['q'] is None
+        assert call_kwargs['user_ns']['r'] is None
 
     def test_help_argument(self):
         """Should display help message."""

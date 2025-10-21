@@ -83,8 +83,8 @@ class TestReadmeExamples:
         })
         q = Q(df)
         
-        # Top by revenue
-        top3 = q.sort('revenue').head(3)
+        # Top by revenue (descending)
+        top3 = q.sort('revenue', ascending=False).head(3)
         assert len(top3) == 3
         assert top3.to_df().iloc[0]['revenue'] == 400
         
@@ -366,8 +366,8 @@ class TestEdgeCases:
         df = pd.DataFrame({'a': [3, 1, 2], 'b': [6, 4, 5]})
         q = Q(df)
         q2 = q.sort()
-        # Sorts by all columns descending
-        assert q2.to_df().iloc[0]['a'] == 3
+        # Sorts by all columns ascending (default)
+        assert q2.to_df().iloc[0]['a'] == 1
 
     def test_to_df_returns_dataframe(self):
         """to_df should return a copy of the DataFrame."""

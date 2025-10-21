@@ -10,13 +10,14 @@ from .core import Q, load_csv, rows
 
 
 def main():
-    """Launch an interactive REPL session with loaded CSV data."""
+    """Launch an interactive REPL session with optional CSV data loading."""
     parser = argparse.ArgumentParser(
         description="Bend: A precise CSV analysis tool with an intuitive query interface"
     )
     parser.add_argument(
         "csv_file",
-        help="Path to CSV file or Google Sheets URL"
+        nargs='?',  # Make it optional
+        help="Path to CSV file or Google Sheets URL (optional)"
     )
     parser.add_argument(
         "--skip-rows",
@@ -28,9 +29,49 @@ def main():
     
     args = parser.parse_args()
     
-    df = load_csv(args.csv_file, skip_rows=args.skip_rows)
-    q = Q(df, source_path=args.csv_file, skip_rows=args.skip_rows)
-    r = list(rows(df))
+    # Load CSV if provided
+    if args.csv_file:
+        df = load_csv(args.csv_file, skip_rows=args.skip_rows)
+        q = Q(df, source_path=args.csv_file, skip_rows=args.skip_rows)
+        r = list(rows(df))
+        
+        banner = (
+            "Loaded as:\n"
+            "  q   -> Q object with tracked change history\n"
+            "  df  -> pandas.DataFrame (for pandas compatibility)\n"
+            "Helpers:\n"
+            "  rows(df), load_csv(url), reload(), refresh()\n"
+            "\n"
+            "Examples:\n"
+            "  q.columns, q.rows  # discover shape\n"
+            "  q.extend(total=lambda x: x.price * x.qty)  # add computed columns\n"
+            "  q.filter(lambda x: x.region == 'CA')  # filter rows\n"
+            "  q.to_df()  # get DataFrame copy for pandas operations\n"
+            "  for row in q: print(row.name)  # iterate over rows\n"
+            "  q.dump('out.csv')  # write to CSV\n"
+        )
+    else:
+        # No file loaded, just provide helpers
+        df = None
+        q = None
+        r = None
+        
+        banner = (
+            "Bend REPL - No data loaded\n"
+            "\n"
+            "Load data:\n"
+            "  df = load_csv('data.csv')  # or URL\n"
+            "  q = Q(df, source_path='data.csv')\n"
+            "\n"
+            "Or with type conversion:\n"
+            "  df = load_csv('data.csv', dtype={'age': int, 'price': float})\n"
+            "  q = Q(df)\n"
+            "\n"
+            "Examples:\n"
+            "  q.columns, q.rows  # discover shape\n"
+            "  q.extend(total=lambda x: x.price * x.qty)  # add computed columns\n"
+            "  q.filter(lambda x: x.region == 'CA')  # filter rows\n"
+        )
     
     # Helper functions for the REPL
     def reload():
@@ -39,6 +80,8 @@ def main():
         Returns the reloaded Q object. You can reassign to q:
             q = reload()
         """
+        if q is None:
+            raise ValueError("No Q object loaded. Load a CSV first.")
         return q.reload()
     
     def refresh():
@@ -47,28 +90,9 @@ def main():
         Returns the refreshed Q object. You can reassign to q:
             q = refresh()
         """
+        if q is None:
+            raise ValueError("No Q object loaded. Load a CSV first.")
         return q.refresh()
-
-    banner = (
-        "Loaded as:\n"
-        "  q   -> Q object with tracked change history\n"
-        "  df  -> pandas.DataFrame (for pandas compatibility)\n"
-        "Helpers:\n"
-        "  rows(df), load_csv(url), reload(), refresh()\n"
-        "\n"
-        "Examples:\n"
-        "  q.columns, q.rows  # discover shape\n"
-        "  q.extend(total=lambda x: x.price * x.qty)  # add computed columns\n"
-        "  q.filter(lambda x: x.region == 'CA')  # filter rows\n"
-        "  q.transform(lambda x: {'name': x.first + ' ' + x.last})  # reshape\n"
-        "  q.hide('id', 'internal')  # hide columns from display only\n"
-        "  q = reload()  # reload from source, re-apply all changes\n"
-        "  q = refresh()  # re-apply changes to base (no file reload)\n"
-        "  q = q.rebase()  # flatten: make current state the new base\n"
-        "  q.to_df()  # get DataFrame copy for pandas operations\n"
-        "  for row in q: print(row.name)  # iterate over rows\n"
-        "  q.dump('out.csv')  # write to CSV\n"
-    )
 
     try:
         from IPython import start_ipython
@@ -78,7 +102,8 @@ def main():
         start_ipython(argv=[], user_ns=ns, display_banner=True)
     except Exception:
         import code
-        code.interact(banner=banner, local=dict(df=df, q=q, r=r, rows=rows, load_csv=load_csv, reload=reload, refresh=refresh, math=math, pd=pd, Q=Q))
+        ns = dict(df=df, q=q, r=r, rows=rows, load_csv=load_csv, reload=reload, refresh=refresh, math=math, pd=pd, Q=Q)
+        code.interact(banner=banner, local=ns)
 
 
 if __name__ == "__main__":

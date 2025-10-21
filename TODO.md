@@ -102,27 +102,6 @@ Q.concat(q1, q2, q3)  # stack multiple
 
 ## Lower Priority - Convenience Features
 
-### 11. String Operations Helper
-```python
-# Currently works:
-q.extend(domain=lambda x: x.email.split('@')[1])
-
-# Could add helper:
-q.str_extract('email', r'@(.+)$', 'domain')
-```
-**Why**: `extend()` + lambdas already handle this, but helpers could be nice.
-
-**Decision**: Probably not needed - lambdas are flexible enough.
-
-### 12. Date Parsing Helper
-```python
-q.parse_dates('order_date', format='%Y-%m-%d')
-q.extend(year=lambda x: parse_date(x.date).year)
-```
-**Why**: CSV dates are always strings. Currently manual parsing in lambdas.
-
-**Decision**: Can be done with extend() easily. Low priority.
-
 ### 13. Binning/Categorization
 ```python
 q.bin('age', bins=[0, 18, 35, 50, 100], labels=['child', 'young', 'middle', 'senior'])
@@ -131,22 +110,15 @@ q.bin('age', bins=[0, 18, 35, 50, 100], labels=['child', 'young', 'middle', 'sen
 
 **Implementation**: Could be useful helper, track as change type.
 
-### 14. Type Conversion
-```python
-q.cast({'age': int, 'price': float, 'active': bool})
-```
-**Why**: CSV columns are all strings initially. pandas handles this on load though.
-
-**Decision**: Load-time option might be better than post-load conversion.
-
 ## Implementation Roadmap
 
 ### Phase 0: Infrastructure (Completed)
 - [x] `memory_usage()` - Memory breakdown reporting
 
 ### Phase 1: Quick Wins (Easy + High Value)
-- [ ] `tail(n)` - Mirror of head()
-- [ ] `sample(n)` or `sample(frac)` - Random sampling
+- [x] `tail(n)` - Mirror of head() (COMPLETED)
+- [x] `sample(n)` or `sample(frac)` - Random sampling with reproducible default (COMPLETED)
+- [x] `dtype` parameter for `load_csv()` - Type conversion at load time (COMPLETED)
 - [ ] `distinct()` or `distinct(*cols)` - Deduplication
 - [x] `select(*cols)` - Column selection (COMPLETED)
 - [x] `drop(*cols)` - Column removal (COMPLETED)

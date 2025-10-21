@@ -26,20 +26,28 @@ def _gsheets_csv(url: str) -> str:
     return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
 
 
-def load_csv(path_or_url: str, skip_rows: int = 0) -> pd.DataFrame:
+def load_csv(path_or_url: str, skip_rows: int = 0, dtype: dict = None) -> pd.DataFrame:
     """Load a CSV file from a local path, URL, or Google Sheets URL.
     
     Args:
         path_or_url: Path to a local CSV file, a URL, or a Google Sheets URL
         skip_rows: Number of rows to skip at the beginning of the file (default: 0)
+        dtype: Dictionary of column names to data types for type conversion (default: None)
+               Example: {'age': int, 'price': float, 'active': bool}
         
     Returns:
         A pandas DataFrame containing the CSV data
+        
+    Example:
+        >>> load_csv('data.csv', dtype={'age': int, 'price': float})
     """
     u = _gsheets_csv(path_or_url)
+    kwargs = {}
     if skip_rows > 0:
-        return pd.read_csv(u, skiprows=skip_rows)
-    return pd.read_csv(u)
+        kwargs['skiprows'] = skip_rows
+    if dtype:
+        kwargs['dtype'] = dtype
+    return pd.read_csv(u, **kwargs)
 
 
 def rows(df: pd.DataFrame):
@@ -163,6 +171,20 @@ class Q:
                 # Take first n rows
                 n = change_data
                 result = result.head(n)
+            
+            elif change_type == "tail":
+                # Take last n rows
+                n = change_data
+                result = result.tail(n)
+            
+            elif change_type == "sample":
+                # Random sample of rows
+                params = change_data
+                result = result.sample(
+                    n=params["n"],
+                    frac=params["frac"],
+                    random_state=params["random_state"]
+                )
             
             elif change_type == "drop":
                 # Drop specified columns
@@ -364,18 +386,72 @@ class Q:
         
         return self._copy_with(df=new_df, changes=new_changes)
     
-    def sort(self, *cols, ascending: bool = False) -> 'Q':
+    def tail(self, n: int = 5) -> 'Q':
+        """Return the last n rows.
+        
+        Args:
+            n: Number of rows to return (default: 5)
+            
+        Returns:
+            A new Q object containing the last n rows
+            
+        Example:
+            >>> q.tail(10)  # Last 10 rows
+            >>> q.sort('date').tail(20)  # Most recent 20 after sorting
+        """
+        new_changes = self._changes + [("tail", n)]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
+    
+    def sample(self, n: int = None, frac: float = None, random_state: int = 42) -> 'Q':
+        """Return a random sample of rows.
+        
+        By default uses random_state=42 for reproducible samples that honor
+        the idempotency requirement. Set random_state=None for truly random
+        sampling (note: breaks reproducibility on refresh/reload).
+        
+        Args:
+            n: Number of rows to sample (mutually exclusive with frac)
+            frac: Fraction of rows to sample (0.0 to 1.0, mutually exclusive with n)
+            random_state: Random seed for reproducibility (default: 42, use None for random)
+            
+        Returns:
+            A new Q object containing the sampled rows
+            
+        Raises:
+            ValueError: If neither or both n and frac are specified
+            
+        Example:
+            >>> q.sample(100)  # 100 random rows (reproducible)
+            >>> q.sample(frac=0.1)  # 10% random sample (reproducible)
+            >>> q.sample(50, random_state=None)  # 50 rows (truly random)
+            >>> q.sample(1000, random_state=123)  # Custom seed
+        """
+        if n is None and frac is None:
+            raise ValueError("Must specify either n or frac")
+        if n is not None and frac is not None:
+            raise ValueError("Cannot specify both n and frac")
+        
+        sample_params = {"n": n, "frac": frac, "random_state": random_state}
+        new_changes = self._changes + [("sample", sample_params)]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
+    
+    def sort(self, *cols, ascending: bool = True) -> 'Q':
         """Sort the DataFrame by one or more columns.
         
         Args:
             *cols: Column names to sort by. If empty, sorts by all columns.
-            ascending: Whether to sort in ascending order (default: False)
+            ascending: Whether to sort in ascending order (default: True)
             
         Returns:
             A new Q object with sorted rows
             
         Example:
-            >>> q.sort('price', 'name', ascending=True)
+            >>> q.sort('price', ascending=False)  # Highest first
+            >>> q.sort('age')  # Lowest first (default)
         """
         new_changes = self._changes + [("sort", (cols, ascending))]
         new_df = self._apply_changes(self._base_df, new_changes)

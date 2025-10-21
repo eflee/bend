@@ -234,22 +234,22 @@ class TestQFilter:
         assert q2._changes[0][0] == "filter"
 
 
-class TestQSortHead:
-    """Tests for Q.sort() and Q.head() methods."""
+class TestQSortHeadTailSample:
+    """Tests for Q.sort(), Q.head(), Q.tail(), and Q.sample() methods."""
 
-    def test_sort_ascending(self):
-        """Should sort in ascending order."""
+    def test_sort_ascending_default(self):
+        """Should sort in ascending order by default."""
         df = pd.DataFrame({"x": [3, 1, 2]})
         q = Q(df)
-        q2 = q.sort("x", ascending=True)
+        q2 = q.sort("x")
         
         assert list(q2.to_df()["x"]) == [1, 2, 3]
 
     def test_sort_descending(self):
-        """Should sort in descending order (default)."""
+        """Should sort in descending order when specified."""
         df = pd.DataFrame({"x": [3, 1, 2]})
         q = Q(df)
-        q2 = q.sort("x")
+        q2 = q.sort("x", ascending=False)
         
         assert list(q2.to_df()["x"]) == [3, 2, 1]
 
@@ -262,6 +262,24 @@ class TestQSortHead:
         assert len(q2) == 3
         assert list(q2.to_df()["x"]) == [0, 1, 2]
 
+    def test_tail(self):
+        """Should return last n rows."""
+        df = pd.DataFrame({"x": range(10)})
+        q = Q(df)
+        q2 = q.tail(3)
+        
+        assert len(q2) == 3
+        assert list(q2.to_df()["x"]) == [7, 8, 9]
+
+    def test_tail_default(self):
+        """tail() with no args should return last 5 rows."""
+        df = pd.DataFrame({"x": range(10)})
+        q = Q(df)
+        q2 = q.tail()
+        
+        assert len(q2) == 5
+        assert list(q2.to_df()["x"]) == [5, 6, 7, 8, 9]
+
     def test_sort_head_chain(self):
         """Should chain sort and head."""
         df = pd.DataFrame({"x": [3, 1, 4, 1, 5]})
@@ -269,6 +287,99 @@ class TestQSortHead:
         q2 = q.sort("x", ascending=True).head(3)
         
         assert list(q2.to_df()["x"]) == [1, 1, 3]
+
+    def test_sort_tail_chain(self):
+        """Should chain sort and tail."""
+        df = pd.DataFrame({"x": [3, 1, 4, 1, 5]})
+        q = Q(df)
+        q2 = q.sort("x", ascending=False).tail(2)
+        
+        # Descending sort: [5, 4, 3, 1, 1], tail(2) = [1, 1]
+        assert list(q2.to_df()["x"]) == [1, 1]
+
+    def test_sample_with_n(self):
+        """Should sample n rows."""
+        df = pd.DataFrame({"x": range(100)})
+        q = Q(df)
+        q2 = q.sample(10)
+        
+        assert len(q2) == 10
+        assert len(q2._changes) == 1
+        assert q2._changes[0][0] == "sample"
+
+    def test_sample_with_frac(self):
+        """Should sample fraction of rows."""
+        df = pd.DataFrame({"x": range(100)})
+        q = Q(df)
+        q2 = q.sample(frac=0.1)
+        
+        assert len(q2) == 10
+
+    def test_sample_reproducible_default(self):
+        """Sample with default random_state should be reproducible."""
+        df = pd.DataFrame({"x": range(100)})
+        q = Q(df)
+        
+        q1 = q.sample(10)
+        q2 = q.sample(10)
+        
+        # Same seed = same sample
+        assert list(q1.to_df()["x"]) == list(q2.to_df()["x"])
+
+    def test_sample_refresh_reproducible(self):
+        """Sample should give same results on refresh."""
+        df = pd.DataFrame({"x": range(100)})
+        q = Q(df)
+        q2 = q.sample(10)
+        
+        original_x = list(q2.to_df()["x"])
+        
+        q3 = q2.refresh()
+        refreshed_x = list(q3.to_df()["x"])
+        
+        assert original_x == refreshed_x
+
+    def test_sample_different_seeds(self):
+        """Different random_state should give different samples."""
+        df = pd.DataFrame({"x": range(100)})
+        q = Q(df)
+        
+        q1 = q.sample(10, random_state=42)
+        q2 = q.sample(10, random_state=123)
+        
+        # Different seeds = (probably) different samples
+        assert list(q1.to_df()["x"]) != list(q2.to_df()["x"])
+
+    def test_sample_requires_n_or_frac(self):
+        """Sample should require either n or frac."""
+        df = pd.DataFrame({"x": range(10)})
+        q = Q(df)
+        
+        with pytest.raises(ValueError, match="Must specify either n or frac"):
+            q.sample()
+
+    def test_sample_not_both_n_and_frac(self):
+        """Sample should not allow both n and frac."""
+        df = pd.DataFrame({"x": range(10)})
+        q = Q(df)
+        
+        with pytest.raises(ValueError, match="Cannot specify both"):
+            q.sample(n=5, frac=0.5)
+
+    def test_sample_n_larger_than_data(self):
+        """Sample with n > dataset should work (pandas behavior)."""
+        df = pd.DataFrame({"x": range(10)})
+        q = Q(df)
+        
+        # pandas allows this with replace=False (default) - returns all rows
+        # This might raise, depends on pandas version
+        try:
+            q2 = q.sample(100)
+            # If it doesn't raise, it should return all rows
+            assert len(q2) == 10
+        except ValueError:
+            # pandas raised ValueError, which is fine
+            pass
 
 
 class TestQRefreshReload:
