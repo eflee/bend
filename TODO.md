@@ -117,7 +117,10 @@ q.bin('age', bins=[0, 18, 35, 50, 100], labels=['child', 'young', 'middle', 'sen
 
 ### Phase 1: Quick Wins (Easy + High Value) - ✅ COMPLETED
 - [x] `tail(n)` - Mirror of head() (COMPLETED)
-- [x] `sample(n)` or `sample(frac)` - Random sampling with reproducible default (COMPLETED)
+- [x] `sample(n, frac, random_state)` - Random sampling (COMPLETED)
+  - **Note:** `sample()` is **non-idempotent by default** (`random_state=None`)
+  - Users must explicitly pass `random_state` for reproducibility
+  - `q.reproducible` flag tracks this
 - [x] `dtype` parameter for `load_csv()` - Type conversion at load time (COMPLETED)
 - [x] `distinct()` or `distinct(*cols)` - Deduplication (COMPLETED)
 - [x] `select(*cols)` - Column selection (COMPLETED)
@@ -125,16 +128,21 @@ q.bin('age', bins=[0, 18, 35, 50, 100], labels=['child', 'young', 'middle', 'sen
 - [x] `rename(**mapping)` - Column renaming (COMPLETED)
 
 ### Phase 2: Multi-Q Operations (Architecture Validated)
-Now feasible with reference-based approach:
-- [ ] `concat(other)` - Vertical stacking (simplest, implement first)
-- [ ] `merge(other, left_on, right_on, how)` - Join with explicit keys
-- [ ] `join(other, on, how)` - Convenience wrapper around merge
-- [ ] Set operations: `union(other)`, `intersect(other)`, `difference(other)`
+Now feasible with **deep copy by default** approach:
+- [ ] `reproducible` property - Track pipeline determinism
+- [ ] `concat(other, deep_copy=True)` - Vertical stacking (simplest, implement first)
+- [ ] `merge(other, on, how, resolve, deep_copy=True)` - Join with explicit conflict resolution
+- [ ] `join(other, on, how, deep_copy=True)` - Convenience wrapper around merge
+- [ ] Set operations: `union(other, deep_copy=True)`, `intersect(other, deep_copy=True)`, `difference(other, deep_copy=True)`
+- [ ] Deep `reload()` - Recursive reload of entire Q tree from disk
 
 **Implementation notes:**
-- Store other Q by reference in change history
-- `memory_usage()` will account for referenced Qs
-- Use `rebase()` to drop references and flatten
+- Store **deep copy** of other Q by default (`deep_copy=True`) for full reproducibility
+- Optional `deep_copy=False` for performance (marks result as non-reproducible)
+- `q.reproducible` flag propagates through operations
+- Column conflicts require explicit `resolve` parameter with lambdas
+- `reload()` is **deep/recursive** (reloads entire tree from disk)
+- Use `rebase()` to drop deep copies and flatten history
 
 ### Phase 3: Data Quality
 - [ ] `fillna(value)` or `fillna(mapping)` - Fill missing values
@@ -156,46 +164,58 @@ Now feasible with reference-based approach:
 - ✅ Immutable operations (all return new Q)
 - ✅ Change tracking and replay capability (`refresh()`, `reload()`)
 - ✅ Q as the core object - all operations return Q
-- ✅ Idempotency - same operations always produce same results
+- ✅ Idempotency* - same operations produce same results when `reproducible=True`
 - ✅ Simple, readable API
 - ✅ Works with the Row namedtuple pattern
 - ✅ Functional programming paradigm
 
+*Note: `sample()` is **non-idempotent by default** (`random_state=None`). Users must pass explicit `random_state` for reproducibility. The `q.reproducible` flag tracks this.
+
 **Architecture for Multi-Q Operations (Merge/Join/Concat):**
 
-Multi-Q operations store the other Q **by reference** (not deep copy) in the change history:
+Multi-Q operations store **deep copies** of other Q objects by default for full reproducibility:
 
 ```python
 # Change history structure:
 [
     ("extend", {"total": lambda x: x.price * x.qty}),
     ("merge", {
-        "other": <reference_to_other_Q>,  # Just a reference
+        "other": <deep_copy_of_other_Q>,  # Full deep copy by default
         "on": "customer_id",
-        "how": "left"
+        "how": "left",
+        "resolve": {"status": lambda a, b: a},
+        "deep_copy": True
     }),
     ("filter", lambda x: x.total > 100)
 ]
 ```
 
 **Key principles:**
-1. **No deep copies**: Store Q references directly - rely on Python's immutability contract
-2. **User responsibility**: If user mutates a Q after merging, behavior is undefined (gentleman's agreement)
-3. **Memory management**: Use `rebase()` to flatten history and drop Q references
-4. **Replay works**: `refresh()` and `reload()` replay merge using stored Q reference
-5. **Memory visibility**: `memory_usage()` reports memory including referenced Qs
+1. **Deep copy by default**: Store `copy.deepcopy(other)` for full reproducibility
+2. **Optional reference mode**: Use `deep_copy=False` for performance (marks as non-reproducible)
+3. **Reproducibility tracking**: `q.reproducible` property propagates through all operations
+4. **Explicit conflict resolution**: Column conflicts require `resolve` parameter with lambdas
+5. **Tree-based history**: Change history forms a tree; `refresh()` and `reload()` are recursive
+6. **Memory management**: Use `rebase()` to flatten history and drop deep copies
+7. **Self-reference protection**: Self-joins deep copy self to avoid circular references
 
 **Benefits:**
-- ✅ Replay preserved through Q references
-- ✅ Idempotent - same Q references produce same results
-- ✅ Memory efficient - no deep copies
+- ✅ Replay preserved through deep copies (fully reproducible)
+- ✅ User freedom - continue using Q objects after merge without side effects
+- ✅ Idempotent - same operations produce same results (if reproducible=True)
+- ✅ Clear contract via `reproducible` flag
+- ✅ Performance option via `deep_copy=False`
 - ✅ Explicit memory management via `rebase()`
-- ✅ Clean, intuitive API
 
-**Challenges to solve:**
+**Trade-offs:**
+- ⚠️ Higher memory usage (mitigated by `rebase()` and `deep_copy=False` option)
+- ⚠️ Column conflicts require explicit resolution (more verbose but safer)
+
+**Remaining challenges:**
 - How to handle operations that need row context (window functions)?
 - When to make an operation "terminal" (like groupby) vs tracked?
-- Pickling/serialization of Q objects with lambdas (see below)
+- Pickling/serialization of Q objects with lambdas (see Serialization section below)
+- Performance optimization for large deep copies (see `deep_copy=False` option)
 
 ## Serialization & Pickling
 
@@ -283,7 +303,7 @@ usage = q3.memory_usage()  # Includes large_q's memory
 print(f"Memory with merge: {usage['total_mb']} MB")
 
 # Flatten to reduce memory
-q4 = q3.rebase()  # Drops reference to large_q
+q4 = q3.rebase()  # Drops deep copy of large_q
 usage = q4.memory_usage()  # Should be smaller
 ```
 
