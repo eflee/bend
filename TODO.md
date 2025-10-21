@@ -115,14 +115,14 @@ q.bin('age', bins=[0, 18, 35, 50, 100], labels=['child', 'young', 'middle', 'sen
 ### Phase 0: Infrastructure (Completed)
 - [x] `memory_usage()` - Memory breakdown reporting
 
-### Phase 1: Quick Wins (Easy + High Value)
+### Phase 1: Quick Wins (Easy + High Value) - ✅ COMPLETED
 - [x] `tail(n)` - Mirror of head() (COMPLETED)
 - [x] `sample(n)` or `sample(frac)` - Random sampling with reproducible default (COMPLETED)
 - [x] `dtype` parameter for `load_csv()` - Type conversion at load time (COMPLETED)
-- [ ] `distinct()` or `distinct(*cols)` - Deduplication
+- [x] `distinct()` or `distinct(*cols)` - Deduplication (COMPLETED)
 - [x] `select(*cols)` - Column selection (COMPLETED)
 - [x] `drop(*cols)` - Column removal (COMPLETED)
-- [ ] `rename(**mapping)` - Column renaming
+- [x] `rename(**mapping)` - Column renaming (COMPLETED)
 
 ### Phase 2: Multi-Q Operations (Architecture Validated)
 Now feasible with reference-based approach:

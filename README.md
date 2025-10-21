@@ -259,6 +259,39 @@ q.select('name', 'email', 'status')
 q.drop('cost').extend(profit=lambda x: x.revenue - x.cost)  # Error!
 ```
 
+### Data Quality
+
+**Remove duplicates:**
+```python
+# Remove completely duplicate rows
+q.distinct()
+
+# Keep first occurrence per customer
+q.distinct('customer_id')
+
+# Unique by email+phone combination
+q.distinct('email', 'phone')
+
+# Common pattern: dedupe before analysis
+result = (q
+    .distinct('order_id')  # Ensure unique orders
+    .extend(revenue=lambda x: x.price * x.qty)
+    .groupby(lambda x: x.region, total=lambda g: sum(r.revenue for r in g))
+)
+```
+
+**Rename columns:**
+```python
+# Fix bad column names from CSV
+q.rename(customerID='customer_id', amt='amount')
+
+# Single rename
+q.rename(old_name='new_name')
+
+# Chain with other operations
+q.rename(price='unit_price').extend(total=lambda x: x.unit_price * x.qty)
+```
+
 ### Real-World Pipeline Example
 
 ```python

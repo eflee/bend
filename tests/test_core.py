@@ -605,6 +605,174 @@ class TestQDropSelect:
         assert "b" not in q3.to_df().columns
 
 
+class TestQDistinct:
+    """Tests for Q.distinct() method."""
+
+    def test_distinct_all_columns(self):
+        """Should remove completely duplicate rows."""
+        df = pd.DataFrame({
+            "a": [1, 2, 1, 3],
+            "b": [10, 20, 10, 30]
+        })
+        q = Q(df)
+        q2 = q.distinct()
+        
+        assert len(q2) == 3
+        assert len(q2._changes) == 1
+        assert q2._changes[0][0] == "distinct"
+
+    def test_distinct_single_column(self):
+        """Should deduplicate based on single column."""
+        df = pd.DataFrame({
+            "customer": ["Alice", "Bob", "Alice", "Charlie"],
+            "order": [1, 2, 3, 4]
+        })
+        q = Q(df)
+        q2 = q.distinct("customer")
+        
+        # Should keep first occurrence of each customer
+        assert len(q2) == 3
+        customers = list(q2.to_df()["customer"])
+        assert customers == ["Alice", "Bob", "Charlie"]
+        orders = list(q2.to_df()["order"])
+        assert orders == [1, 2, 4]
+
+    def test_distinct_multiple_columns(self):
+        """Should deduplicate based on combination of columns."""
+        df = pd.DataFrame({
+            "email": ["a@x.com", "b@x.com", "a@x.com", "a@y.com"],
+            "phone": ["111", "222", "111", "111"]
+        })
+        q = Q(df)
+        q2 = q.distinct("email", "phone")
+        
+        # Unique by email+phone combination
+        assert len(q2) == 3
+
+    def test_distinct_preserves_order(self):
+        """Should keep first occurrence (stable order)."""
+        df = pd.DataFrame({"x": [3, 1, 3, 2, 1]})
+        q = Q(df)
+        q2 = q.distinct("x")
+        
+        # Should keep order: 3 (first), 1 (first), 2
+        assert list(q2.to_df()["x"]) == [3, 1, 2]
+
+    def test_distinct_with_other_operations(self):
+        """Should chain with other operations."""
+        df = pd.DataFrame({
+            "x": [1, 2, 2, 3, 3, 3],
+            "y": [10, 20, 20, 30, 30, 30]
+        })
+        q = Q(df)
+        q2 = q.filter(lambda row: row.x > 1).distinct("x")
+        
+        assert len(q2) == 2  # x=2 and x=3
+
+    def test_distinct_with_refresh(self):
+        """Should work with refresh/replay."""
+        df = pd.DataFrame({"x": [1, 1, 2, 2, 3]})
+        q = Q(df)
+        q2 = q.distinct("x")
+        q3 = q2.refresh()
+        
+        assert len(q3) == 3
+        assert list(q3.to_df()["x"]) == [1, 2, 3]
+
+    def test_distinct_no_duplicates(self):
+        """Should handle case with no duplicates."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        q2 = q.distinct()
+        
+        assert len(q2) == 3
+
+    def test_distinct_all_duplicates(self):
+        """Should handle case where all rows are duplicates."""
+        df = pd.DataFrame({"x": [1, 1, 1, 1]})
+        q = Q(df)
+        q2 = q.distinct()
+        
+        assert len(q2) == 1
+
+
+class TestQRename:
+    """Tests for Q.rename() method."""
+
+    def test_rename_single_column(self):
+        """Should rename a single column."""
+        df = pd.DataFrame({"old_name": [1, 2, 3]})
+        q = Q(df)
+        q2 = q.rename(old_name="new_name")
+        
+        assert "new_name" in q2.to_df().columns
+        assert "old_name" not in q2.to_df().columns
+        assert list(q2.to_df()["new_name"]) == [1, 2, 3]
+
+    def test_rename_multiple_columns(self):
+        """Should rename multiple columns at once."""
+        df = pd.DataFrame({"a": [1], "b": [2], "c": [3]})
+        q = Q(df)
+        q2 = q.rename(a="x", c="z")
+        
+        assert list(q2.to_df().columns) == ["x", "b", "z"]
+
+    def test_rename_nonexistent_column(self):
+        """Should gracefully handle renaming nonexistent columns."""
+        df = pd.DataFrame({"a": [1], "b": [2]})
+        q = Q(df)
+        q2 = q.rename(nonexistent="new_name", a="x")
+        
+        # Should rename 'a' but ignore 'nonexistent'
+        assert list(q2.to_df().columns) == ["x", "b"]
+
+    def test_rename_tracks_changes(self):
+        """Should track rename in change history."""
+        df = pd.DataFrame({"old": [1]})
+        q = Q(df)
+        q2 = q.rename(old="new")
+        
+        assert len(q2._changes) == 1
+        assert q2._changes[0][0] == "rename"
+
+    def test_rename_with_refresh(self):
+        """Should work with refresh/replay."""
+        df = pd.DataFrame({"a": [1, 2, 3]})
+        q = Q(df)
+        q2 = q.rename(a="x")
+        q3 = q2.refresh()
+        
+        assert "x" in q3.to_df().columns
+        assert "a" not in q3.to_df().columns
+
+    def test_rename_chains_with_operations(self):
+        """Should chain with other operations."""
+        df = pd.DataFrame({"old_name": [1, 2, 3, 4]})
+        q = Q(df)
+        q2 = q.rename(old_name="value").filter(lambda x: x.value > 2)
+        
+        assert list(q2.to_df().columns) == ["value"]
+        assert list(q2.to_df()["value"]) == [3, 4]
+
+    def test_rename_before_extend(self):
+        """Should be able to extend using renamed columns."""
+        df = pd.DataFrame({"price": [10, 20], "qty": [2, 3]})
+        q = Q(df)
+        q2 = q.rename(price="unit_price").extend(total=lambda x: x.unit_price * x.qty)
+        
+        assert "total" in q2.to_df().columns
+        assert list(q2.to_df()["total"]) == [20, 60]
+
+    def test_rename_preserves_data(self):
+        """Should only change column names, not data."""
+        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+        q = Q(df)
+        q2 = q.rename(a="x", b="y")
+        
+        assert list(q2.to_df()["x"]) == [1, 2, 3]
+        assert list(q2.to_df()["y"]) == [4, 5, 6]
+
+
 class TestQHideUnhide:
     """Tests for Q.hide() and Q.unhide() methods."""
 

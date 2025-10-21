@@ -200,6 +200,19 @@ class Q:
                 # Only keep columns that exist
                 cols_to_keep = [c for c in cols_to_keep if c in result.columns]
                 result = result[cols_to_keep]
+            
+            elif change_type == "distinct":
+                # Remove duplicate rows
+                subset = change_data  # None means all columns, or list of specific columns
+                result = result.drop_duplicates(subset=subset, keep='first')
+            
+            elif change_type == "rename":
+                # Rename columns
+                mapping = change_data
+                # Only rename columns that exist
+                valid_mapping = {old: new for old, new in mapping.items() if old in result.columns}
+                if valid_mapping:
+                    result = result.rename(columns=valid_mapping)
         
         return result
     
@@ -495,6 +508,49 @@ class Q:
             >>> q.select('name', 'email', 'age')  # Keep only these columns
         """
         new_changes = self._changes + [("select", list(cols))]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
+    
+    def distinct(self, *cols) -> 'Q':
+        """Remove duplicate rows, optionally considering only specific columns.
+        
+        When columns are specified, keeps the first occurrence of each unique
+        combination of values in those columns. When no columns are specified,
+        removes rows that are completely identical across all columns.
+        
+        Args:
+            *cols: Optional column names to consider for uniqueness.
+                   If empty, considers all columns.
+            
+        Returns:
+            A new Q object with duplicates removed
+            
+        Examples:
+            >>> q.distinct()  # Remove completely duplicate rows
+            >>> q.distinct('customer_id')  # Keep first occurrence per customer
+            >>> q.distinct('email', 'phone')  # Unique by email+phone combination
+        """
+        subset = list(cols) if cols else None
+        new_changes = self._changes + [("distinct", subset)]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
+    
+    def rename(self, **mapping) -> 'Q':
+        """Rename columns using keyword arguments.
+        
+        Args:
+            **mapping: Keyword arguments where key is old name and value is new name
+            
+        Returns:
+            A new Q object with renamed columns
+            
+        Examples:
+            >>> q.rename(customer_id='cust_id')
+            >>> q.rename(old_name='new_name', another='better_name')
+        """
+        new_changes = self._changes + [("rename", mapping)]
         new_df = self._apply_changes(self._base_df, new_changes)
         
         return self._copy_with(df=new_df, changes=new_changes)
