@@ -120,7 +120,7 @@ q.bin('age', bins=[0, 18, 35, 50, 100], labels=['child', 'young', 'middle', 'sen
 - [x] `sample(n, frac, random_state)` - Random sampling (COMPLETED)
   - **Note:** `sample()` is **non-idempotent by default** (`random_state=None`)
   - Users must explicitly pass `random_state` for reproducibility
-  - `q.reproducible` flag tracks this
+  - `q.deterministic` flag tracks this
 - [x] `dtype` parameter for `load_csv()` - Type conversion at load time (COMPLETED)
 - [x] `distinct()` or `distinct(*cols)` - Deduplication (COMPLETED)
 - [x] `select(*cols)` - Column selection (COMPLETED)
@@ -129,7 +129,7 @@ q.bin('age', bins=[0, 18, 35, 50, 100], labels=['child', 'young', 'middle', 'sen
 
 ### Phase 2: Multi-Q Operations - ✅ COMPLETED
 Implemented with **deep copy by default** approach:
-- [x] `reproducible` property - Track pipeline determinism (COMPLETED)
+- [x] `deterministic` property - Track pipeline determinism (COMPLETED)
 - [x] `concat(other, deep_copy=True)` - Vertical stacking (COMPLETED)
 - [x] `merge(other, on, how, resolve, deep_copy=True)` - Join with explicit conflict resolution (COMPLETED)
 - [x] `join(other, on, how, deep_copy=True)` - Convenience wrapper around merge (COMPLETED)
@@ -138,8 +138,8 @@ Implemented with **deep copy by default** approach:
 
 **Implementation notes:**
 - Store **deep copy** of other Q by default (`deep_copy=True`) for full reproducibility
-- Optional `deep_copy=False` for performance (marks result as non-reproducible)
-- `q.reproducible` flag propagates through operations
+- Optional `deep_copy=False` for performance (marks result as non-deterministic)
+- `q.deterministic` flag propagates through operations
 - Column conflicts require explicit `resolve` parameter with lambdas
 - `reload()` is **deep/recursive** (reloads entire tree from disk)
 - Use `rebase()` to drop deep copies and flatten history
@@ -162,14 +162,14 @@ Implemented with **deep copy by default** approach:
 
 **Must preserve (P0 Requirements):**
 - ✅ Immutable operations (all return new Q)
-- ✅ Change tracking and replay capability (`refresh()`, `reload()`)
+- ✅ Change tracking and replay capability (`replay()`, `reload()`)
 - ✅ Q as the core object - all operations return Q
-- ✅ Idempotency* - same operations produce same results when `reproducible=True`
+- ✅ Idempotency* - same operations produce same results when `deterministic=True`
 - ✅ Simple, readable API
 - ✅ Works with the Row namedtuple pattern
 - ✅ Functional programming paradigm
 
-*Note: `sample()` is **non-idempotent by default** (`random_state=None`). Users must pass explicit `random_state` for reproducibility. The `q.reproducible` flag tracks this.
+*Note: `sample()` is **non-idempotent by default** (`random_state=None`). Users must pass explicit `random_state` for reproducibility. The `q.deterministic` flag tracks this.
 
 **Architecture for Multi-Q Operations (Merge/Join/Concat):**
 
@@ -192,18 +192,18 @@ Multi-Q operations store **deep copies** of other Q objects by default for full 
 
 **Key principles:**
 1. **Deep copy by default**: Store `copy.deepcopy(other)` for full reproducibility
-2. **Optional reference mode**: Use `deep_copy=False` for performance (marks as non-reproducible)
-3. **Reproducibility tracking**: `q.reproducible` property propagates through all operations
+2. **Optional reference mode**: Use `deep_copy=False` for performance (marks as non-deterministic)
+3. **Reproducibility tracking**: `q.deterministic` property propagates through all operations
 4. **Explicit conflict resolution**: Column conflicts require `resolve` parameter with lambdas
-5. **Tree-based history**: Change history forms a tree; `refresh()` and `reload()` are recursive
+5. **Tree-based history**: Change history forms a tree; `replay()` and `reload()` are recursive
 6. **Memory management**: Use `rebase()` to flatten history and drop deep copies
 7. **Self-reference protection**: Self-joins deep copy self to avoid circular references
 
 **Benefits:**
-- ✅ Replay preserved through deep copies (fully reproducible)
+- ✅ Replay preserved through deep copies (fully deterministic)
 - ✅ User freedom - continue using Q objects after merge without side effects
-- ✅ Idempotent - same operations produce same results (if reproducible=True)
-- ✅ Clear contract via `reproducible` flag
+- ✅ Idempotent - same operations produce same results (if deterministic=True)
+- ✅ Clear contract via `deterministic` flag
 - ✅ Performance option via `deep_copy=False`
 - ✅ Explicit memory management via `rebase()`
 

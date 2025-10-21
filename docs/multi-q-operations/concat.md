@@ -11,7 +11,7 @@ q.concat(other: Q, deep_copy: bool = True) -> Q
 ## Parameters
 
 - `other`: Another Q object to concatenate
-- `deep_copy`: If `True` (default), stores a deep copy of `other` for full reproducibility. If `False`, stores a reference (faster but non-reproducible)
+- `deep_copy`: If `True` (default), stores a deep copy of `other` for full reproducibility. If `False`, stores a reference (faster but non-deterministic)
 
 ## Returns
 
@@ -99,8 +99,8 @@ q2 = Q(df2)
 # Stores deep copy of q2
 combined = q1.concat(q2, deep_copy=True)
 
-# Fully reproducible
-print(combined.reproducible)  # True
+# Fully deterministic
+print(combined.deterministic)  # True
 
 # Changes to q2 don't affect combined
 q2_modified = q2.filter(lambda x: x.value > 100)
@@ -114,8 +114,8 @@ large_q = Q(huge_df)  # 10M rows
 # Faster, no deep copy
 combined = q1.concat(large_q, deep_copy=False)
 
-# Non-reproducible
-print(combined.reproducible)  # False
+# Non-deterministic
+print(combined.deterministic)  # False
 
 # Use rebase() to make self-contained
 combined = combined.rebase()  # Now independent
@@ -236,10 +236,10 @@ result = Q(pd.concat(dfs, ignore_index=True))
 ## Idempotency
 
 ✅ **Conditional**
-- **Yes** if both Q objects are reproducible and `deep_copy=True` (default)
+- **Yes** if both Q objects are deterministic and `deep_copy=True` (default)
 - **No** if `deep_copy=False`
 
-Check with `q.reproducible` property.
+Check with `q.deterministic` property.
 
 ## See Also
 

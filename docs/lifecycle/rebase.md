@@ -70,7 +70,7 @@ flat = result.rebase()  # No lambdas in history
 **Costs:**
 - ❌ Cannot `reload()` (no source path preserved)
 - ❌ Cannot inspect change history
-- ❌ Cannot `refresh()` back to base
+- ❌ Cannot `replay()` back to base
 
 ## When to Rebase
 
@@ -85,5 +85,5 @@ flat = result.rebase()  # No lambdas in history
 
 ## See Also
 
-- [`reload()`](reload.md), [`refresh()`](refresh.md)
+- [`reload()`](reload.md), [`replay()`](refresh.md)
 - [`memory_usage()`](memory_usage.md)

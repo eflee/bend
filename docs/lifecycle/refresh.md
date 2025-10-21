@@ -5,7 +5,7 @@ Re-apply all tracked changes to the in-memory base DataFrame.
 ## Signature
 
 ```python
-q.refresh() -> Q
+q.replay() -> Q
 ```
 
 ## Returns
@@ -23,7 +23,7 @@ q = Q(df)
 q2 = q.filter(lambda x: x.active).assign(score=lambda x: x.value * 2)
 
 # Re-apply all changes to base
-q3 = q2.refresh()  # Same as q2
+q3 = q2.replay()  # Same as q2
 ```
 
 ## Use Cases
@@ -31,7 +31,7 @@ q3 = q2.refresh()  # Same as q2
 ### 1. Verify Idempotency
 ```python
 q2 = q.filter(...).assign(...)
-q3 = q2.refresh()
+q3 = q2.replay()
 
 # q2 and q3 should be identical
 assert q2.to_df().equals(q3.to_df())
@@ -43,12 +43,12 @@ assert q2.to_df().equals(q3.to_df())
 q._df['new_col'] = 123  # Manual mutation (bad!)
 
 # Refresh to recompute proper state
-q = q.refresh()  # Back to correct state
+q = q.replay()  # Back to correct state
 ```
 
 ## refresh() vs reload()
 
-| `refresh()` | `reload()` |
+| `replay()` | `reload()` |
 |-------------|------------|
 | Uses in-memory base | Reads from disk |
 | Fast | Slower (disk I/O) |

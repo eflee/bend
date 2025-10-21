@@ -63,7 +63,7 @@ Computing summary statistics:
 ### 🔄 [Lifecycle](lifecycle/)
 Managing Q state and history:
 - [`reload()`](lifecycle/reload.md) - Reload from disk (deep/recursive)
-- [`refresh()`](lifecycle/refresh.md) - Re-apply changes from memory
+- [`replay()`](lifecycle/refresh.md) - Re-apply changes from memory
 - [`rebase()`](lifecycle/rebase.md) - Flatten history
 - [`memory_usage()`](lifecycle/memory_usage.md) - Memory breakdown
 
@@ -75,7 +75,7 @@ Exporting and displaying data:
 
 ### 🏷️ [Properties](properties/)
 Read-only attributes:
-- [All Properties](properties/properties.md) - `columns`, `cols`, `rows`, `reproducible`
+- [All Properties](properties/properties.md) - `columns`, `cols`, `rows`, `deterministic`
 
 ## Key Concepts
 
@@ -100,10 +100,10 @@ q3 = q2.reload()  # Reloads CSV and replays changes
 Track whether your pipeline is deterministic:
 ```python
 q2 = q.sample(100)  # Non-deterministic
-print(q2.reproducible)  # False
+print(q2.deterministic)  # False
 
 q3 = q.sample(100, random_state=42)  # Deterministic
-print(q3.reproducible)  # True
+print(q3.deterministic)  # True
 ```
 
 ### Row Namedtuples
@@ -244,8 +244,8 @@ Q was created without a source path, or after a terminal operation like `groupby
 q = Q(df, source_path='data.csv')
 ```
 
-### Non-reproducible pipeline
-Check `q.reproducible`. Use `random_state` in `sample()` and `deep_copy=True` in merge/concat.
+### Non-deterministic pipeline
+Check `q.deterministic`. Use `random_state` in `sample()` and `deep_copy=True` in merge/concat.
 
 ## See Also
 
@@ -255,11 +255,11 @@ Check `q.reproducible`. Use `random_state` in `sample()` and `deep_copy=True` in
 
 ## Philosophy
 
-Bend is designed to make CSV analysis **simple, safe, and reproducible**:
+Bend is designed to make CSV analysis **simple, safe, and deterministic**:
 
 - **Simple**: Pandas with training wheels - intuitive API, readable code
 - **Safe**: Immutable operations, explicit conflict resolution, validation
-- **Reproducible**: Change tracking, replay capability, determinism tracking
+- **Deterministic**: Change tracking, replay capability, determinism tracking
 
 When Bend feels limiting, that's a feature not a bug - drop to pandas via `to_df()` for unrestricted power, then bring results back into Bend with `Q(df)`.
 

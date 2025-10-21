@@ -19,7 +19,7 @@ Re-apply changes to in-memory base.
 **When to use**: Verify idempotency, reset after manual changes
 
 ```python
-q.refresh()  # Recomputes from base + changes
+q.replay()  # Recomputes from base + changes
 ```
 
 ### [rebase()](rebase.md)
@@ -46,6 +46,6 @@ print(f"Total: {usage['total_mb']} MB")
 | Need to... | Use |
 |------------|-----|
 | Get fresh data from disk | `reload()` |
-| Verify pipeline works | `refresh()` |
+| Verify pipeline works | `replay()` |
 | Reduce memory usage | `rebase()` |
 | Monitor memory | `memory_usage()` |

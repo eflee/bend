@@ -38,7 +38,7 @@ class TestHelperFunctions:
         df = load_csv(str(csv_file), skip_rows=2)
         assert len(df) == 1
         assert list(df.columns) == ["name", "age"]
-    
+
     def test_load_csv_with_dtype(self, tmp_path):
         """Should convert column types on load."""
         csv_file = tmp_path / "test.csv"
@@ -334,19 +334,19 @@ class TestQSortHeadTailSample:
         
         # Same seed = same sample
         assert list(q1.to_df()["x"]) == list(q2.to_df()["x"])
-        assert q1.reproducible  # Should be reproducible with seed
+        assert q1.deterministic  # Should be reproducible with seed
 
     def test_sample_refresh_reproducible(self):
         """Sample with random_state should give same results on refresh."""
         df = pd.DataFrame({"x": range(100)})
         q = Q(df)
         q2 = q.sample(10, random_state=42)
-        q3 = q2.refresh()
+        q3 = q2.replay()
         
         # Should get same results with explicit seed
         assert list(q2.to_df()["x"]) == list(q3.to_df()["x"])
-        assert q2.reproducible  # Should be reproducible
-        assert q3.reproducible
+        assert q2.deterministic  # Should be reproducible
+        assert q3.deterministic
     
     def test_sample_non_deterministic_default(self):
         """Sample without random_state should be non-deterministic."""
@@ -354,7 +354,7 @@ class TestQSortHeadTailSample:
         q = Q(df)
         
         q1 = q.sample(10)  # No random_state
-        assert not q1.reproducible  # Should be marked non-reproducible
+        assert not q1.deterministic  # Should be marked non-reproducible
 
     def test_sample_different_seeds(self):
         """Different random_state should give different samples."""
@@ -399,8 +399,8 @@ class TestQSortHeadTailSample:
             pass
 
 
-class TestQRefreshReload:
-    """Tests for Q.refresh() and Q.reload() methods."""
+class TestQReplayReload:
+    """Tests for Q.replay() and Q.reload() methods."""
 
     def test_refresh(self):
         """Should re-apply changes to base."""
@@ -410,8 +410,8 @@ class TestQRefreshReload:
         
         assert len(q2) == 2
         
-        # Refresh should give same result
-        q3 = q2.refresh()
+        # Replay should give same result
+        q3 = q2.replay()
         assert len(q3) == 2
         assert list(q3.to_df()["y"]) == [4, 6]
 
@@ -522,7 +522,7 @@ class TestQAggregations:
         q = Q(df)
         assert q.nunique("x") == 3
         assert set(q.unique("x")) == {1, 2, 3}
-    
+
     def test_std(self):
         """Should compute standard deviation."""
         df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
@@ -632,8 +632,8 @@ class TestQDropSelect:
         assert "total" in q2.to_df().columns
         assert "b" not in q2.to_df().columns
         
-        # Refresh should re-apply drop and extend
-        q3 = q2.refresh()
+        # Replay should re-apply drop and extend
+        q3 = q2.replay()
         assert "total" in q3.to_df().columns
         assert "b" not in q3.to_df().columns
 
@@ -707,7 +707,7 @@ class TestQDistinct:
         df = pd.DataFrame({"x": [1, 1, 2, 2, 3]})
         q = Q(df)
         q2 = q.distinct("x")
-        q3 = q2.refresh()
+        q3 = q2.replay()
         
         assert len(q3) == 3
         assert list(q3.to_df()["x"]) == [1, 2, 3]
@@ -773,7 +773,7 @@ class TestQRename:
         df = pd.DataFrame({"a": [1, 2, 3]})
         q = Q(df)
         q2 = q.rename(a="x")
-        q3 = q2.refresh()
+        q3 = q2.replay()
         
         assert "x" in q3.to_df().columns
         assert "a" not in q3.to_df().columns
@@ -839,12 +839,12 @@ class TestQConcat:
         q3 = q1.concat(q2)
         
         # Should be reproducible with deep copy
-        assert q3.reproducible
+        assert q3.deterministic
         
         # Verify it's a deep copy by checking we can modify original
         # and it doesn't affect the concat result
         q4 = q2.assign(y=lambda x: x.x * 2)
-        q5 = q3.refresh()
+        q5 = q3.replay()
         
         # q3 should still have original q2 data (no y column)
         assert "y" not in q5.to_df().columns
@@ -858,7 +858,7 @@ class TestQConcat:
         q3 = q1.concat(q2, deep_copy=False)
         
         # Should be marked as non-reproducible
-        assert not q3.reproducible
+        assert not q3.deterministic
 
     def test_concat_propagates_reproducibility(self):
         """Should propagate reproducibility flag from both Qs."""
@@ -869,13 +869,13 @@ class TestQConcat:
         
         # Both reproducible
         q3 = q1.concat(q2)
-        assert q3.reproducible
+        assert q3.deterministic
         
         # One non-reproducible
         q2_sample = q2.sample(10)  # No random_state
-        assert not q2_sample.reproducible
+        assert not q2_sample.deterministic
         q4 = q1.concat(q2_sample)
-        assert not q4.reproducible
+        assert not q4.deterministic
 
     def test_concat_tracks_changes(self):
         """Should track concat in change history."""
@@ -895,7 +895,7 @@ class TestQConcat:
         q1 = Q(df1)
         q2 = Q(df2)
         q3 = q1.concat(q2)
-        q4 = q3.refresh()
+        q4 = q3.replay()
         
         assert len(q4) == 4
         assert list(q4.to_df()["x"]) == [1, 2, 3, 4]
@@ -1025,11 +1025,11 @@ class TestQMerge:
         q3 = q1.merge(q2, on='id')
         
         # Should be reproducible with deep copy
-        assert q3.reproducible
+        assert q3.deterministic
         
         # Verify it's a deep copy
         q4 = q2.assign(salary=lambda x: 50000)
-        q5 = q3.refresh()
+        q5 = q3.replay()
         
         # q3 should still have original q2 data (no salary column)
         assert "salary" not in q5.to_df().columns
@@ -1043,7 +1043,7 @@ class TestQMerge:
         q3 = q1.merge(q2, on='id', deep_copy=False)
         
         # Should be marked as non-reproducible
-        assert not q3.reproducible
+        assert not q3.deterministic
 
     def test_merge_propagates_reproducibility(self):
         """Should propagate reproducibility flag from both Qs."""
@@ -1054,13 +1054,13 @@ class TestQMerge:
         
         # Both reproducible
         q3 = q1.merge(q2, on='id')
-        assert q3.reproducible
+        assert q3.deterministic
         
         # One non-reproducible
         q2_sample = q2.sample(10)  # No random_state
-        assert not q2_sample.reproducible
+        assert not q2_sample.deterministic
         q4 = q1.merge(q2_sample, on='id')
-        assert not q4.reproducible
+        assert not q4.deterministic
 
     def test_merge_multiple_keys(self):
         """Should merge on multiple columns."""
@@ -1091,7 +1091,7 @@ class TestQMerge:
         q1 = Q(df1)
         q2 = Q(df2)
         q3 = q1.merge(q2, on='id')
-        q4 = q3.refresh()
+        q4 = q3.replay()
         
         assert len(q4) == 2
         assert set(q4.to_df().columns) == {"id", "x", "y"}
@@ -1235,12 +1235,12 @@ class TestQSetOperations:
         
         # Union
         q3 = q1.union(q2)
-        assert q3.reproducible
+        assert q3.deterministic
         
         # With non-reproducible Q
         q2_sample = q2.sample(10)
         q4 = q1.union(q2_sample)
-        assert not q4.reproducible
+        assert not q4.deterministic
 
 
 class TestQShowDump:
@@ -1372,7 +1372,7 @@ class TestQReloadRecursive:
         csv_file.write_text("x\n10\n20\n")
         
         q3 = q2.reload()
-        assert q3.reproducible  # Should still be reproducible
+        assert q3.deterministic  # Should still be reproducible
 
 
 class TestQHideUnhide:

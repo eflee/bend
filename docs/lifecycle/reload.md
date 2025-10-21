@@ -115,7 +115,7 @@ q2.reload()  # ValueError: no source path
 
 ## reload() vs refresh()
 
-| `reload()` | `refresh()` |
+| `reload()` | `replay()` |
 |------------|-------------|
 | Reads from disk | Uses in-memory base |
 | Recursive (reloads other Qs) | Recursive (refreshes other Qs) |
@@ -127,7 +127,7 @@ q2.reload()  # ValueError: no source path
 q2 = q.reload()
 
 # refresh() - recompute from memory
-q2 = q.refresh()
+q2 = q.replay()
 ```
 
 ## Idempotency
@@ -136,5 +136,5 @@ q2 = q.refresh()
 
 ## See Also
 
-- [`refresh()`](refresh.md) - Re-apply changes without disk reload
+- [`replay()`](refresh.md) - Re-apply changes without disk reload
 - [`rebase()`](rebase.md) - Flatten history

@@ -165,7 +165,7 @@ result = (q
 
 ## Idempotency
 
-✅ **Yes** - `assign()` is fully idempotent. The same `assign()` call will always produce the same result when replayed via `refresh()` or `reload()`.
+✅ **Yes** - `assign()` is fully idempotent. The same `assign()` call will always produce the same result when replayed via `replay()` or `reload()`.
 
 ## See Also
 

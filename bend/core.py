@@ -88,7 +88,7 @@ class Q:
         >>> q = Q(df, source_path='data.csv')
         >>> q2 = q.assign(total=lambda x: x.price * x.qty)
         >>> q3 = q2.filter(lambda x: x.total > 100)
-        >>> q3.refresh()  # Re-apply changes to base data
+        >>> q3.replay()  # Re-apply changes to base data
     """
     
     def __init__(
@@ -99,7 +99,8 @@ class Q:
         base_df: pd.DataFrame = None,
         changes: List[Tuple[str, Any]] = None,
         hidden_cols: set = None,
-        reproducible: bool = True
+        deterministic: bool = True,
+        reloadable: bool = None
     ):
         """Initialize a Q object with a DataFrame.
         
@@ -110,7 +111,8 @@ class Q:
             base_df: Base DataFrame (if None, df is used as base)
             changes: List of tracked changes
             hidden_cols: Set of column names to hide from display
-            reproducible: Whether this Q's history contains only deterministic operations
+            deterministic: Whether this Q's history contains only deterministic operations
+            reloadable: Whether this Q can be reloaded from source (if None, inferred from source_path)
         """
         self._base_df = base_df if base_df is not None else df.copy()
         self._changes: List[Tuple[str, Any]] = changes or []
@@ -118,7 +120,8 @@ class Q:
         self._skip_rows = skip_rows
         self._hidden_cols = hidden_cols or set()
         self._df = df
-        self._reproducible = reproducible
+        self._deterministic = deterministic
+        self._reloadable = reloadable if reloadable is not None else (source_path is not None)
     
     def _apply_changes(self, base: pd.DataFrame, changes: List[Tuple[str, Any]] = None) -> pd.DataFrame:
         """Apply tracked changes to a base DataFrame.
@@ -297,7 +300,8 @@ class Q:
             'base_df': self._base_df,
             'changes': self._changes.copy(),
             'hidden_cols': self._hidden_cols.copy(),
-            'reproducible': self._reproducible
+            'deterministic': self._deterministic,
+            'reloadable': self._reloadable
         }
         params.update(kwargs)
         return Q(**params)
@@ -365,29 +369,57 @@ class Q:
         return len(self._df)
     
     @property
-    def reproducible(self) -> bool:
+    def deterministic(self) -> bool:
         """Return whether this Q's history contains only deterministic operations.
         
-        A Q is reproducible if all operations in its history will produce the same
+        A Q is deterministic if all operations in its history will produce the same
         results when replayed. Non-deterministic operations (like sample() without
         a random_state, or merge() with deep_copy=False) will set this flag to False.
         
         Returns:
-            True if all operations are deterministic and reproducible,
+            True if all operations are deterministic,
             False if any operation is non-deterministic
             
         Example:
             >>> q = Q(df)
-            >>> q.reproducible
+            >>> q.deterministic
             True
             >>> q2 = q.sample(100)  # No random_state - non-deterministic
-            >>> q2.reproducible
+            >>> q2.deterministic
             False
             >>> q3 = q.sample(100, random_state=42)  # Deterministic
-            >>> q3.reproducible
+            >>> q3.deterministic
             True
         """
-        return self._reproducible
+        return self._deterministic
+    
+    @property
+    def reloadable(self) -> bool:
+        """Return whether this Q can be reloaded from source file(s).
+        
+        A Q is reloadable if it (and all Qs in its change tree) were created from
+        source files and have not been rebased. After a rebase(), the change history
+        is cleared and the Q can no longer be reloaded from source.
+        
+        Returns:
+            True if this Q can be reloaded from source,
+            False if it cannot (no source path, or rebased, or contains non-reloadable Qs)
+            
+        Example:
+            >>> q = Q(load_csv('data.csv'), source_path='data.csv')
+            >>> q.reloadable
+            True
+            >>> q2 = q.filter(lambda x: x.age > 18)
+            >>> q2.reloadable
+            True
+            >>> q3 = q2.rebase()  # Clears history
+            >>> q3.reloadable
+            False
+            >>> q4 = Q(df)  # No source path
+            >>> q4.reloadable
+            False
+        """
+        return self._reloadable
     
     def assign(self, **newcols) -> 'Q':
         """Add new columns to the DataFrame based on existing columns.
@@ -533,9 +565,9 @@ class Q:
         """Return a random sample of rows.
         
         By default sampling is **non-deterministic** (random_state=None), which means
-        each call will return different results. To make sampling reproducible, pass
+        each call will return different results. To make sampling deterministic, pass
         an explicit random_state value. Non-deterministic sampling marks the Q as
-        non-reproducible (q.reproducible will be False).
+        non-deterministic (q.deterministic will be False).
         
         Args:
             n: Number of rows to sample (mutually exclusive with frac)
@@ -552,10 +584,10 @@ class Q:
         Example:
             >>> q.sample(100)  # 100 random rows (non-deterministic, different each time)
             >>> q.sample(frac=0.1)  # 10% random sample (non-deterministic)
-            >>> q.sample(50, random_state=42)  # 50 rows (reproducible with seed)
-            >>> q.sample(1000, random_state=123)  # Custom seed (reproducible)
+            >>> q.sample(50, random_state=42)  # 50 rows (deterministic with seed)
+            >>> q.sample(1000, random_state=123)  # Custom seed (deterministic)
             
-        Idempotent: Only if random_state is specified (not None)
+        Deterministic: Only if random_state is specified (not None)
         """
         if n is None and frac is None:
             raise ValueError("Must specify either n or frac")
@@ -566,10 +598,10 @@ class Q:
         new_changes = self._changes + [("sample", sample_params)]
         new_df = self._apply_changes(self._base_df, new_changes)
         
-        # Mark as non-reproducible if random_state is None
-        new_reproducible = self._reproducible and (random_state is not None)
+        # Mark as non-deterministic if random_state is None
+        new_deterministic = self._deterministic and (random_state is not None)
         
-        return self._copy_with(df=new_df, changes=new_changes, reproducible=new_reproducible)
+        return self._copy_with(df=new_df, changes=new_changes, deterministic=new_deterministic)
     
     def sort(self, *cols, ascending: bool = True) -> 'Q':
         """Sort the DataFrame by one or more columns.
@@ -690,12 +722,12 @@ class Q:
         Combines rows from both Q objects. Column names must match (or be subset/superset).
         Missing columns are filled with NaN. By default, stores a deep copy of the other Q
         for full reproducibility. Use deep_copy=False for better performance with large
-        datasets (marks result as non-reproducible).
+        datasets (marks result as non-deterministic and non-reloadable).
         
         Args:
             other: Another Q object to concatenate
             deep_copy: If True (default), stores a deep copy for full reproducibility.
-                      If False, stores reference and marks as non-reproducible.
+                      If False, stores reference and marks as non-deterministic/non-reloadable.
                       
         Returns:
             A new Q object with rows from both Q objects
@@ -709,9 +741,9 @@ class Q:
             >>> q_double = q.concat(q)
             >>>
             >>> # Performance mode for large datasets
-            >>> q_combined = q1.concat(huge_q, deep_copy=False)  # Faster but non-reproducible
+            >>> q_combined = q1.concat(huge_q, deep_copy=False)  # Faster but non-deterministic
             
-        Idempotent: Yes (if both Q objects are reproducible and deep_copy=True)
+        Deterministic: Yes (if both Q objects are deterministic and deep_copy=True)
         """
         # Handle self-reference: deep copy self to avoid circular reference
         if other is self:
@@ -720,26 +752,29 @@ class Q:
             # Store FULL deep copy of other Q including its history
             other_copy = copy.deepcopy(other)
         else:
-            # Store reference - faster but breaks reproducibility guarantee
+            # Store reference - faster but breaks determinism/reloadability guarantee
             other_copy = other
         
         new_changes = self._changes + [("concat", {"other": other_copy, "deep_copy": deep_copy})]
         new_df = self._apply_changes(self._base_df, new_changes)
         
-        # Propagate reproducibility
+        # Propagate deterministic and reloadable flags
         if deep_copy:
-            new_reproducible = self._reproducible and other._reproducible
+            new_deterministic = self._deterministic and other._deterministic
+            new_reloadable = self._reloadable and other._reloadable
         else:
-            new_reproducible = False  # Can't guarantee reproducibility with references
+            new_deterministic = False  # Can't guarantee determinism with references
+            new_reloadable = False  # Can't reload with references
         
-        return self._copy_with(df=new_df, changes=new_changes, reproducible=new_reproducible)
+        return self._copy_with(df=new_df, changes=new_changes, 
+                              deterministic=new_deterministic, reloadable=new_reloadable)
     
     def merge(self, other: 'Q', on, how: str = 'inner', resolve: dict = None, deep_copy: bool = True) -> 'Q':
         """Merge with another Q object based on key columns.
         
         Similar to pandas merge/join but requires explicit handling of column conflicts.
         By default, stores a deep copy of the other Q for full reproducibility. Use
-        deep_copy=False for better performance with large datasets (marks as non-reproducible).
+        deep_copy=False for better performance with large datasets (marks as non-deterministic/non-reloadable).
         
         Args:
             other: Another Q object to merge with
@@ -749,7 +784,7 @@ class Q:
                     Lambda signature: lambda left_val, right_val: result_val
                     Required if column conflicts exist (excluding merge keys).
             deep_copy: If True (default), stores a deep copy for full reproducibility.
-                      If False, stores reference and marks as non-reproducible.
+                      If False, stores reference and marks as non-deterministic/non-reloadable.
                       
         Returns:
             A new Q object with merged data
@@ -775,9 +810,9 @@ class Q:
             >>> q = employees.merge(employees, on='manager_id')
             >>>
             >>> # Performance mode for large datasets
-            >>> q = small.merge(huge_q, on='id', deep_copy=False)  # Faster but non-reproducible
+            >>> q = small.merge(huge_q, on='id', deep_copy=False)  # Faster but non-deterministic
             
-        Idempotent: Yes (if both Q objects are reproducible and deep_copy=True)
+        Deterministic: Yes (if both Q objects are deterministic and deep_copy=True)
         """
         # Handle self-reference: deep copy self to avoid circular reference
         if other is self:
@@ -804,13 +839,16 @@ class Q:
         })]
         new_df = self._apply_changes(self._base_df, new_changes)
         
-        # Propagate reproducibility
+        # Propagate deterministic and reloadable flags
         if deep_copy:
-            new_reproducible = self._reproducible and other._reproducible
+            new_deterministic = self._deterministic and other._deterministic
+            new_reloadable = self._reloadable and other._reloadable
         else:
-            new_reproducible = False  # Can't guarantee reproducibility with references
+            new_deterministic = False  # Can't guarantee determinism with references
+            new_reloadable = False  # Can't reload with references
         
-        return self._copy_with(df=new_df, changes=new_changes, reproducible=new_reproducible)
+        return self._copy_with(df=new_df, changes=new_changes, 
+                              deterministic=new_deterministic, reloadable=new_reloadable)
     
     def join(self, other: 'Q', on, how: str = 'inner', deep_copy: bool = True) -> 'Q':
         """Join with another Q object (convenience wrapper around merge).
@@ -823,7 +861,7 @@ class Q:
             on: Column name(s) to join on. Can be a string for single column or list for multiple.
             how: Type of join ('inner', 'left', 'right', 'outer'). Default: 'inner'
             deep_copy: If True (default), stores a deep copy for full reproducibility.
-                      If False, stores reference and marks as non-reproducible.
+                      If False, stores reference and marks as non-deterministic/non-reloadable.
                       
         Returns:
             A new Q object with joined data
@@ -836,7 +874,7 @@ class Q:
             >>> orders = Q(orders_df)
             >>> q = customers.join(orders, on='customer_id', how='left')
             
-        Idempotent: Yes (if both Q objects are reproducible and deep_copy=True)
+        Deterministic: Yes (if both Q objects are deterministic and deep_copy=True)
         """
         return self.merge(other, on=on, how=how, resolve=None, deep_copy=deep_copy)
     
@@ -849,7 +887,7 @@ class Q:
         Args:
             other: Another Q object to union with (must have same columns)
             deep_copy: If True (default), stores a deep copy for full reproducibility.
-                      If False, stores reference and marks as non-reproducible.
+                      If False, stores reference and marks as non-deterministic/non-reloadable.
                       
         Returns:
             A new Q object with unique rows from both Q objects
@@ -859,7 +897,7 @@ class Q:
             >>> q2 = Q(df2)  # [2, 3, 4]
             >>> q3 = q1.union(q2)  # [1, 2, 3, 4]
             
-        Idempotent: Yes (if both Q objects are reproducible and deep_copy=True)
+        Deterministic: Yes (if both Q objects are deterministic and deep_copy=True)
         """
         return self.concat(other, deep_copy=deep_copy).distinct()
     
@@ -871,7 +909,7 @@ class Q:
         Args:
             other: Another Q object to intersect with (must have same columns)
             deep_copy: If True (default), stores a deep copy for full reproducibility.
-                      If False, stores reference and marks as non-reproducible.
+                      If False, stores reference and marks as non-deterministic/non-reloadable.
                       
         Returns:
             A new Q object with rows common to both Q objects
@@ -881,7 +919,7 @@ class Q:
             >>> q2 = Q(df2)  # [2, 3, 4]
             >>> q3 = q1.intersect(q2)  # [2, 3]
             
-        Idempotent: Yes (if both Q objects are reproducible and deep_copy=True)
+        Deterministic: Yes (if both Q objects are deterministic and deep_copy=True)
         """
         # Get the other Q's DataFrame
         if other is self:
@@ -897,16 +935,18 @@ class Q:
         result_df = pd.merge(self._df, other_df, how='inner')
         result_df = result_df.drop_duplicates()
         
-        # Determine reproducibility
+        # Determine deterministic and reloadable flags
         if deep_copy:
-            new_reproducible = self._reproducible and other._reproducible
+            new_deterministic = self._deterministic and other._deterministic
+            new_reloadable = self._reloadable and other._reloadable
         else:
-            new_reproducible = False
+            new_deterministic = False
+            new_reloadable = False
         
         # Return new Q with result (no change tracking needed, it's a terminal operation in a sense)
         # Actually, we should track this for reproducibility. Let's use a simple filter.
         # For now, create a new Q with the result
-        return Q(result_df, reproducible=new_reproducible)
+        return Q(result_df, deterministic=new_deterministic, reloadable=new_reloadable)
     
     def difference(self, other: 'Q', deep_copy: bool = True) -> 'Q':
         """Difference from another Q (rows in self but not in other).
@@ -916,7 +956,7 @@ class Q:
         Args:
             other: Another Q object to subtract (must have same columns)
             deep_copy: If True (default), stores a deep copy for full reproducibility.
-                      If False, stores reference and marks as non-reproducible.
+                      If False, stores reference and marks as non-deterministic/non-reloadable.
                       
         Returns:
             A new Q object with rows in self but not in other
@@ -926,12 +966,13 @@ class Q:
             >>> q2 = Q(df2)  # [2, 3, 4]
             >>> q3 = q1.difference(q2)  # [1]
             
-        Idempotent: Yes (if both Q objects are reproducible and deep_copy=True)
+        Deterministic: Yes (if both Q objects are deterministic and deep_copy=True)
         """
         # Get the other Q's DataFrame
         if other is self:
             # Self-difference is empty
-            return Q(pd.DataFrame(columns=self._df.columns), reproducible=self._reproducible)
+            return Q(pd.DataFrame(columns=self._df.columns), 
+                    deterministic=self._deterministic, reloadable=self._reloadable)
         elif deep_copy:
             other_copy = copy.deepcopy(other)
         else:
@@ -944,13 +985,15 @@ class Q:
         result_df = merged[merged['_merge'] == 'left_only'].drop('_merge', axis=1)
         result_df = result_df.drop_duplicates()
         
-        # Determine reproducibility
+        # Determine deterministic and reloadable flags
         if deep_copy:
-            new_reproducible = self._reproducible and other._reproducible
+            new_deterministic = self._deterministic and other._deterministic
+            new_reloadable = self._reloadable and other._reloadable
         else:
-            new_reproducible = False
+            new_deterministic = False
+            new_reloadable = False
         
-        return Q(result_df, reproducible=new_reproducible)
+        return Q(result_df, deterministic=new_deterministic, reloadable=new_reloadable)
     
     def show(self, n: int = 20) -> 'Q':
         """Print the first n rows of the DataFrame (respects hidden columns).
@@ -1039,7 +1082,7 @@ class Q:
             # Unhide all columns
             return self._copy_with(hidden_cols=set())
     
-    def reload(self) -> 'Q':
+    def reload(self, allow_partial_reload: bool = False) -> 'Q':
         """Reload data from the source CSV file and recursively reload all referenced Qs.
         
         This is a DEEP/RECURSIVE operation that reloads the entire Q tree from disk:
@@ -1051,20 +1094,42 @@ class Q:
         Validates that all original columns still exist in the reloaded data.
         New columns and rows are allowed.
         
+        Args:
+            allow_partial_reload: If False (default), raises error if any Q in the change tree
+                                 is not reloadable. If True, non-reloadable Qs use their current
+                                 base DataFrame (partial reload).
+        
         Returns:
             A new Q object with reloaded base data and re-applied changes
             
         Raises:
-            ValueError: If no source path was provided or if required columns are missing
+            ValueError: If no source path was provided, if required columns are missing,
+                       or if allow_partial_reload=False and any Q in the tree is not reloadable
             
         Example:
             >>> q2 = q.assign(total=lambda x: x.price * x.qty)
             >>> q3 = q2.concat(other_q)
             >>> # Both source CSVs are updated
             >>> q4 = q3.reload()  # Reloads both sources and re-applies all operations
+            >>>
+            >>> # After rebase, some Qs may not be reloadable
+            >>> q_rebased = q2.rebase()
+            >>> q5 = q.concat(q_rebased)
+            >>> q5.reload()  # Error: q_rebased is not reloadable
+            >>> q5.reload(allow_partial_reload=True)  # OK: uses q_rebased's current state
         """
         if not self._source_path:
-            raise ValueError("Cannot reload: no source path available")
+            if not allow_partial_reload:
+                raise ValueError("Cannot reload: no source path available. Use allow_partial_reload=True to skip.")
+            else:
+                # No source, just use current state
+                return self
+        
+        if not self._reloadable and not allow_partial_reload:
+            raise ValueError(
+                "Cannot reload: this Q is not reloadable (may have been rebased or contain non-reloadable Qs). "
+                "Use allow_partial_reload=True to reload what's possible."
+            )
         
         # First, recursively reload any Q objects in the change history
         new_changes = []
@@ -1072,11 +1137,25 @@ class Q:
             if change_type in ("concat", "merge"):
                 # Reload the referenced Q
                 other_q = change_data["other"]
-                if other_q._source_path:
-                    reloaded_other = other_q.reload()
+                if other_q._reloadable and other_q._source_path:
+                    # Fully reloadable
+                    reloaded_other = other_q.reload(allow_partial_reload=allow_partial_reload)
+                elif other_q._source_path and allow_partial_reload:
+                    # Has source but not fully reloadable - try anyway
+                    try:
+                        reloaded_other = other_q.reload(allow_partial_reload=True)
+                    except ValueError:
+                        # Can't reload, use current state
+                        reloaded_other = other_q
+                elif not other_q._source_path and allow_partial_reload:
+                    # No source path, use current state
+                    reloaded_other = other_q
                 else:
-                    # No source path, just refresh it
-                    reloaded_other = other_q.refresh()
+                    # Not reloadable and strict mode
+                    raise ValueError(
+                        f"Cannot reload: Q in {change_type} operation at change #{len(new_changes)+1} "
+                        f"is not reloadable. Use allow_partial_reload=True to skip non-reloadable Qs."
+                    )
                 
                 # Reconstruct the change with reloaded Q
                 new_data = change_data.copy()
@@ -1104,18 +1183,18 @@ class Q:
         
         return self._copy_with(df=new_df, base_df=new_base, changes=new_changes)
     
-    def refresh(self) -> 'Q':
+    def replay(self) -> 'Q':
         """Re-apply all tracked changes to the in-memory base DataFrame.
         
         This recomputes the current state from base + changes without reloading from disk.
-        Useful for resetting any manual DataFrame manipulations.
+        Useful for resetting any manual DataFrame manipulations or verifying change history.
         
         Returns:
             A new Q object with changes re-applied to base
             
         Example:
             >>> q2 = q.assign(total=lambda x: x.price * x.qty)
-            >>> q3 = q2.refresh()  # Re-applies the assignment
+            >>> q3 = q2.replay()  # Re-applies the assignment
         """
         new_df = self._apply_changes(self._base_df)
         return self._copy_with(df=new_df)
@@ -1127,12 +1206,17 @@ class Q:
         This is useful for performance when you have a long change history or to drop
         deep copies of other Q objects stored in the history.
         
+        After rebasing, the Q is marked as deterministic (empty history is deterministic)
+        but non-reloadable (change history needed for reload is lost).
+        
         Returns:
             A new Q object with current state as base and empty change list
             
         Example:
             >>> q2 = q.assign(a=...).filter(...).assign(b=...).filter(...)
             >>> q3 = q2.rebase()  # Flattens: current state becomes new base
+            >>> q3.deterministic  # True (empty history)
+            >>> q3.reloadable  # False (history is gone)
             >>> # After concat with large Q:
             >>> q4 = q.concat(large_q).filter(...).rebase()  # Drops deep copy of large_q
         """
@@ -1143,7 +1227,8 @@ class Q:
             base_df=self._df.copy(),
             changes=[],
             hidden_cols=self._hidden_cols.copy(),
-            reproducible=self._reproducible
+            deterministic=True,  # Empty history is deterministic
+            reloadable=False  # Can't reload without change history
         )
     
     # Aggregation methods (informational, don't modify state)

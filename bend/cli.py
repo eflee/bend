@@ -40,7 +40,7 @@ def main():
             "  q   -> Q object with tracked change history\n"
             "  df  -> pandas.DataFrame (for pandas compatibility)\n"
             "Helpers:\n"
-            "  rows(df), load_csv(url), reload(), refresh()\n"
+            "  rows(df), load_csv(url), reload(), replay()\n"
             "\n"
             "Examples:\n"
             "  q.columns, q.rows  # discover shape\n"
@@ -84,25 +84,25 @@ def main():
             raise ValueError("No Q object loaded. Load a CSV first.")
         return q.reload()
     
-    def refresh():
+    def replay():
         """Re-apply all tracked changes to the in-memory base data.
         
-        Returns the refreshed Q object. You can reassign to q:
-            q = refresh()
+        Returns the replayed Q object. You can reassign to q:
+            q = replay()
         """
         if q is None:
             raise ValueError("No Q object loaded. Load a CSV first.")
-        return q.refresh()
+        return q.replay()
 
     try:
         from IPython import start_ipython
         import builtins
-        ns = dict(df=df, q=q, r=r, rows=rows, load_csv=load_csv, reload=reload, refresh=refresh, math=math, pd=pd, Q=Q)
+        ns = dict(df=df, q=q, r=r, rows=rows, load_csv=load_csv, reload=reload, replay=replay, math=math, pd=pd, Q=Q)
         builtins.__dict__.update(ns)
         start_ipython(argv=[], user_ns=ns, display_banner=True)
     except Exception:
         import code
-        ns = dict(df=df, q=q, r=r, rows=rows, load_csv=load_csv, reload=reload, refresh=refresh, math=math, pd=pd, Q=Q)
+        ns = dict(df=df, q=q, r=r, rows=rows, load_csv=load_csv, reload=reload, replay=replay, math=math, pd=pd, Q=Q)
         code.interact(banner=banner, local=ns)
 
 

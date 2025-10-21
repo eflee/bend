@@ -29,7 +29,7 @@ q2 = q.sample(100)
 # 10% of rows
 q2 = q.sample(frac=0.1)
 
-# Reproducible sample
+# Deterministic sample
 q2 = q.sample(100, random_state=42)
 ```
 
@@ -39,11 +39,11 @@ q2 = q.sample(100, random_state=42)
 
 ```python
 q2 = q.sample(100)  # Different results each time
-print(q2.reproducible)  # False
+print(q2.deterministic)  # False
 
 # For reproducibility, pass random_state
 q2 = q.sample(100, random_state=42)  # Same results every time
-print(q2.reproducible)  # True
+print(q2.deterministic)  # True
 ```
 
 ## Use Cases
@@ -68,7 +68,7 @@ group_b = q.difference(group_a)
 q.sample(1000)  # If q has 100 rows, raises ValueError
 ```
 
-### Non-Reproducible by Default
+### Non-Deterministic by Default
 ```python
 q2 = q.sample(100)
 q3 = q2.reload()  # Different 100 rows!

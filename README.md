@@ -89,10 +89,10 @@ Bend tracks whether your pipeline is deterministic:
 
 ```python
 q2 = q.sample(100)  # Non-deterministic
-print(q2.reproducible)  # False
+print(q2.deterministic)  # False
 
 q3 = q.sample(100, random_state=42)  # Deterministic
-print(q3.reproducible)  # True
+print(q3.deterministic)  # True
 ```
 
 ## Basic Examples
@@ -186,7 +186,7 @@ Compute statistics:
 #### 🔄 Lifecycle
 Manage state and history:
 - **[`reload()`](docs/lifecycle/reload.md)** - Reload from disk (recursive)
-- **[`refresh()`](docs/lifecycle/refresh.md)** - Re-apply changes from memory
+- **[`replay()`](docs/lifecycle/refresh.md)** - Re-apply changes from memory
 - **[`rebase()`](docs/lifecycle/rebase.md)** - Flatten history
 - **[`memory_usage()`](docs/lifecycle/memory_usage.md)** - Memory breakdown
 
@@ -200,7 +200,7 @@ Export and display:
 Read-only attributes:
 - **[`columns` / `cols`](docs/properties/properties.md)** - Column names
 - **[`rows`](docs/properties/properties.md)** - Row count
-- **[`reproducible`](docs/properties/properties.md)** - Determinism flag
+- **[`deterministic`](docs/properties/properties.md)** - Determinism flag
 
 ## Common Patterns
 
@@ -318,7 +318,7 @@ Operations are idempotent by default—replaying produces identical results:
 
 ```python
 q2 = q.filter(lambda x: x.active)
-q3 = q2.refresh()  # Re-applies filter
+q3 = q2.replay()  # Re-applies filter
 assert q2.to_df().equals(q3.to_df())
 ```
 
@@ -327,13 +327,13 @@ assert q2.to_df().equals(q3.to_df())
 By default, `merge()`, `concat()`, etc. deep copy other Q objects for full reproducibility:
 
 ```python
-q1.merge(q2, on='id', deep_copy=True)  # Default, reproducible
-q1.merge(huge_q, on='id', deep_copy=False)  # Faster, non-reproducible
+q1.merge(q2, on='id', deep_copy=True)  # Default, deterministic
+q1.merge(huge_q, on='id', deep_copy=False)  # Faster, non-deterministic
 ```
 
 ### Change History as Tree
 
-For multi-Q operations, change history becomes a tree. `reload()` and `refresh()` recursively process the entire tree.
+For multi-Q operations, change history becomes a tree. `reload()` and `replay()` recursively process the entire tree.
 
 ## Troubleshooting
 
@@ -352,8 +352,8 @@ Provide `source_path` when creating Q:
 q = Q(df, source_path='data.csv')
 ```
 
-### Pipeline is non-reproducible
-Check `q.reproducible`. Use `random_state` in `sample()` and `deep_copy=True` in merge/concat.
+### Pipeline is non-deterministic
+Check `q.deterministic`. Use `random_state` in `sample()` and `deep_copy=True` in merge/concat.
 
 ## Version
 
@@ -365,7 +365,7 @@ Check `q.reproducible`. Use `random_state` in `sample()` and `deep_copy=True` in
 - **BREAKING**: `extend()` renamed to `assign()` (aligns with pandas)
 - **BREAKING**: `transform()` renamed to `map()` (clearer semantics)
 - Added multi-Q operations: `merge()`, `join()`, `concat()`, `union()`, `intersect()`, `difference()`
-- Added `reproducible` property for determinism tracking
+- Added `deterministic` property for determinism tracking
 - Changed `sample()` to non-deterministic by default (pass `random_state` for reproducibility)
 - Added deep/recursive `reload()` for multi-Q pipelines
 - Added `deep_copy` parameter to all multi-Q operations

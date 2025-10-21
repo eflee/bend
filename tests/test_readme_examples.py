@@ -430,7 +430,7 @@ class TestEdgeCases:
         """Refresh with no changes should return equivalent object."""
         df = pd.DataFrame({'x': [1, 2, 3]})
         q = Q(df)
-        q2 = q.refresh()
+        q2 = q.replay()
         assert len(q2.to_df()) == len(q.to_df())
         assert list(q2.to_df()['x']) == list(q.to_df()['x'])
 

@@ -20,7 +20,7 @@ q.merge(other: Q, on, how: str = 'inner', resolve: dict = None, deep_copy: bool 
   - `'right'`: All rows from right (other), matched from left
   - `'outer'`: All rows from both, matched where possible
 - `resolve`: **Required if column conflicts exist**. Dict mapping conflicting column names to resolution lambdas with signature `lambda left_val, right_val: result_val`
-- `deep_copy`: If `True` (default), stores a deep copy of `other` for full reproducibility. If `False`, stores a reference (faster but non-reproducible)
+- `deep_copy`: If `True` (default), stores a deep copy of `other` for full reproducibility. If `False`, stores a reference (faster but non-deterministic)
 
 ## Returns
 
@@ -156,8 +156,8 @@ q2 = Q(df2)
 # Stores a deep copy of q2 in q3's history
 q3 = q1.merge(q2, on='id', deep_copy=True)
 
-# q3 is fully reproducible
-print(q3.reproducible)  # True (if both q1 and q2 are reproducible)
+# q3 is fully deterministic
+print(q3.deterministic)  # True (if both q1 and q2 are deterministic)
 
 # Modifying q2 after the merge doesn't affect q3
 q2 = q2.filter(lambda x: x.value > 100)
@@ -171,8 +171,8 @@ q3_reloaded = q3.reload()  # Still works, uses original q2 state
 huge_q = Q(very_large_df)
 q3 = q1.merge(huge_q, on='id', deep_copy=False)
 
-# Faster, but non-reproducible
-print(q3.reproducible)  # False
+# Faster, but non-deterministic
+print(q3.deterministic)  # False
 
 # If huge_q is modified, reload() might fail or produce different results
 huge_q = huge_q.filter(...)  # Changes the object q3 references
@@ -321,10 +321,10 @@ result = (customers
 ## Idempotency
 
 ✅ **Conditional**
-- **Yes** if both Q objects are reproducible and `deep_copy=True` (default)
+- **Yes** if both Q objects are deterministic and `deep_copy=True` (default)
 - **No** if `deep_copy=False`
 
-Check with `q.reproducible` property.
+Check with `q.deterministic` property.
 
 ## See Also
 

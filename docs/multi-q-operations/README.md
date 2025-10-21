@@ -74,10 +74,10 @@ before.difference(after)  # Deleted rows
 All multi-Q operations support `deep_copy` parameter:
 
 ```python
-# Default: deep copy (reproducible)
+# Default: deep copy (deterministic)
 q1.merge(q2, on='id', deep_copy=True)
 
-# Performance: reference (non-reproducible)
+# Performance: reference (non-deterministic)
 q1.merge(huge_q, on='id', deep_copy=False)
 ```
 

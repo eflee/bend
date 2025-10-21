@@ -40,23 +40,23 @@ assert q.rows == len(q)
 print(f"{q.rows} rows × {len(q.columns)} columns")
 ```
 
-## reproducible
+## deterministic
 
 Check if Q's history is fully deterministic.
 
 ```python
-is_repro = q.reproducible  # True or False
+is_repro = q.deterministic  # True or False
 ```
 
-### What Makes a Q Non-Reproducible?
+### What Makes a Q Non-Deterministic?
 
 ```python
-# These make reproducible=False:
+# These make deterministic=False:
 q.sample(100)  # No random_state
 q.merge(other, deep_copy=False)  # Reference mode
 q.concat(other, deep_copy=False)
 
-# These keep reproducible=True:
+# These keep deterministic=True:
 q.sample(100, random_state=42)  # Explicit seed
 q.filter(lambda x: x.value > 100)
 q.assign(total=lambda x: x.price * x.qty)
@@ -66,20 +66,20 @@ q.assign(total=lambda x: x.price * x.qty)
 
 ```python
 q2 = q.filter(...).sample(100).assign(...)
-print(q2.reproducible)  # False (sample without seed)
+print(q2.deterministic)  # False (sample without seed)
 
 # reload() will produce different results!
 q3 = q2.reload()  # Different 100 rows sampled
 
 # To fix:
 q2 = q.filter(...).sample(100, random_state=42).assign(...)
-print(q2.reproducible)  # True
+print(q2.deterministic)  # True
 q3 = q2.reload()  # Same 100 rows
 ```
 
 ### Propagation
 
-`reproducible` propagates like a flag through all operations:
+`deterministic` propagates like a flag through all operations:
 
 ```python
 q1 = Q(df)  # True
@@ -88,7 +88,7 @@ q3 = q2.sample(100)  # False (non-deterministic sample)
 q4 = q3.assign(...)  # False (inherited from q3)
 ```
 
-**Once False, stays False** (unless you rebase from a reproducible Q).
+**Once False, stays False** (unless you rebase from a deterministic Q).
 
 ## Usage Examples
 
@@ -100,13 +100,13 @@ print(f"Available columns: {', '.join(q.columns)}")
 print(f"Dataset: {q.rows} rows × {len(q.columns)} columns")
 
 # Reproducibility check
-if not q.reproducible:
-    print("⚠️ Warning: Pipeline is non-reproducible")
+if not q.deterministic:
+    print("⚠️ Warning: Pipeline is non-deterministic")
     print("reload() may produce different results")
 ```
 
 ## See Also
 
-- [`sample()`](sample.md) - Non-reproducible by default
-- [`merge()`](merge.md), [`concat()`](concat.md) - `deep_copy=False` makes non-reproducible
-- [`reload()`](reload.md), [`refresh()`](refresh.md) - Replay operations
+- [`sample()`](sample.md) - Non-deterministic by default
+- [`merge()`](merge.md), [`concat()`](concat.md) - `deep_copy=False` makes non-deterministic
+- [`reload()`](reload.md), [`replay()`](refresh.md) - Replay operations

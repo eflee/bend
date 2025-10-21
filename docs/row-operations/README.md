@@ -15,8 +15,8 @@ Selecting, ordering, and sampling rows.
 ```python
 q.head(10)                          # First 10
 q.tail(10)                          # Last 10
-q.sample(100)                       # 100 random (non-reproducible)
-q.sample(100, random_state=42)      # 100 random (reproducible)
+q.sample(100)                       # 100 random (non-deterministic)
+q.sample(100, random_state=42)      # 100 random (deterministic)
 q.sort('date')                      # Sort ascending
 q.sort('price', ascending=False)    # Sort descending
 q.distinct()                        # Remove duplicate rows
