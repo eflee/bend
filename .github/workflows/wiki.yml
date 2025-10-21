@@ -1,2 +1,28 @@
-- name: Github wiki sync repository action
-  uses: gouef/github-wiki-sync-repository-action@v1.0.1
+name: Sync Docs to Wiki
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - '.github/workflows/wiki.yml'
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better context
+      
+      - name: Sync docs to wiki
+        uses: Andrew-Chen-Wang/github-wiki-action@v4
+        env:
+          WIKI_DIR: docs/
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_MAIL: github-actions[bot]@users.noreply.github.com
+          GH_NAME: github-actions[bot]
+          EXCLUDE: "*.pyc,__pycache__/"
