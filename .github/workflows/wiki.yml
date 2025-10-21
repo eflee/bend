@@ -19,9 +19,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Sync docs to wiki
-        uses: gouef/github-wiki-sync-repository-action@main
+      - name: Checkout wiki
+        uses: actions/checkout@v4
         with:
-          dir: 'docs/'
-        env:
-          GITHUB_TOKEN: ${{ secrets.BEND_WIKI_PUSH }}
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+          token: ${{ secrets.BEND_WIKI_PUSH }}
+      
+      - name: Sync docs to wiki
+        run: |
+          # Copy contents of docs/ to wiki root (not the docs folder itself)
+          cp -r docs/* wiki/
+          
+          # Navigate to wiki repo
+          cd wiki
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Add all changes
+          git add .
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Sync docs from main branch (commit: ${{ github.sha }})"
+            git push
+          fi

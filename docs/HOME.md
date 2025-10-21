@@ -4,7 +4,7 @@ Complete reference for all Bend REPL capabilities.
 
 ## 📘 Core Concepts
 
-**[Understanding Determinism & Reloadability](understanding-determinism-reloadability.md)** - Essential reading for understanding how Bend tracks pipeline properties and what guarantees you have about reproducibility.
+**[Understanding Determinism & Reloadability](concepts/understanding-determinism-reloadability.md)** - Essential reading for understanding how Bend tracks pipeline properties and what guarantees you have about reproducibility.
 
 ## Quick Start
 
@@ -26,6 +26,10 @@ result.dump('output.csv')
 ```
 
 ## Documentation Categories
+
+### 📘 [Core Concepts](concepts/)
+Fundamental concepts for understanding Bend:
+- [Understanding Determinism & Reloadability](concepts/understanding-determinism-reloadability.md) - Replayability, reloadability, and determinism explained
 
 ### 🔧 [Data Manipulation](data-manipulation/)
 Core operations for transforming your data:

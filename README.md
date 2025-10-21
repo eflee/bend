@@ -105,7 +105,7 @@ print(q3.deterministic)  # True - seeded random
 print(q3.reloadable)     # True - can reload
 ```
 
-**Learn more**: See [Understanding Determinism & Reloadability](docs/understanding-determinism-reloadability.md) for a comprehensive guide.
+**Learn more**: See [Understanding Determinism & Reloadability](docs/concepts/understanding-determinism-reloadability.md) for a comprehensive guide.
 
 ## Basic Examples
 
