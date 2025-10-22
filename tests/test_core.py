@@ -4,7 +4,7 @@ import pytest
 import pandas as pd
 import tempfile
 import os
-from bend.core import Q, load_csv, rows, _gsheets_csv
+from bend.core import Q, _load_csv_to_dataframe, rows, _gsheets_csv
 
 
 class TestHelperFunctions:
@@ -26,7 +26,7 @@ class TestHelperFunctions:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("name,age\nAlice,25\nBob,30\n")
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         assert len(df) == 2
         assert list(df.columns) == ["name", "age"]
 
@@ -35,7 +35,7 @@ class TestHelperFunctions:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("# Comment\n# Header\nname,age\nAlice,25\n")
         
-        df = load_csv(str(csv_file), skip_rows=2)
+        df = _load_csv_to_dataframe(str(csv_file), skip_rows=2)
         assert len(df) == 1
         assert list(df.columns) == ["name", "age"]
 
@@ -44,7 +44,7 @@ class TestHelperFunctions:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("name,age,price\nAlice,30,19.99\nBob,25,29.99\n")
         
-        df = load_csv(str(csv_file), dtype={'age': int, 'price': float})
+        df = _load_csv_to_dataframe(str(csv_file), dtype={'age': int, 'price': float})
         assert df['age'].dtype == 'int64'
         assert df['price'].dtype == 'float64'
 
@@ -430,7 +430,7 @@ class TestQFilterFlags:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("x,y\n1,a\n2,b\n3,c\n")
         
-        q = Q(load_csv(str(csv_file)), source_path=str(csv_file))
+        q = Q(_load_csv_to_dataframe(str(csv_file)), source_path=str(csv_file))
         assert q.reloadable is True
         
         result = q.filter(lambda x: x.x > 1)
@@ -468,7 +468,7 @@ class TestQFilterFlags:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("id,name\n1,Alice\n2,Bob\n3,Carol\n")
         
-        left = Q(load_csv(str(csv_file)), source_path=str(csv_file))
+        left = Q(_load_csv_to_dataframe(str(csv_file)), source_path=str(csv_file))
         right = Q(pd.DataFrame({'id': [1, 3]}))
         
         assert left.reloadable is True
@@ -483,7 +483,7 @@ class TestQFilterFlags:
         csv_file.write_text("id,name\n1,Alice\n2,Bob\n")
         
         left = Q(pd.DataFrame({'id': [1, 2, 3]}))
-        right = Q(load_csv(str(csv_file)), source_path=str(csv_file))
+        right = Q(_load_csv_to_dataframe(str(csv_file)), source_path=str(csv_file))
         
         assert left.reloadable is False
         assert right.reloadable is True
@@ -515,7 +515,7 @@ class TestQFilterFlags:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("id,name\n1,Alice\n2,Bob\n3,Carol\n")
         
-        left = Q(load_csv(str(csv_file)), source_path=str(csv_file))
+        left = Q(_load_csv_to_dataframe(str(csv_file)), source_path=str(csv_file))
         right = Q(pd.DataFrame({'id': [1]}))
         
         assert left.reloadable is True
@@ -530,7 +530,7 @@ class TestQFilterFlags:
         csv_file.write_text("id,name\n1,Alice\n2,Bob\n")
         
         left = Q(pd.DataFrame({'id': [1, 2, 3]}))
-        right = Q(load_csv(str(csv_file)), source_path=str(csv_file))
+        right = Q(_load_csv_to_dataframe(str(csv_file)), source_path=str(csv_file))
         
         assert left.reloadable is False
         assert right.reloadable is True
@@ -543,7 +543,7 @@ class TestQFilterFlags:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("id,age,name\n1,25,Alice\n2,15,Bob\n3,30,Carol\n")
         
-        q = Q(load_csv(str(csv_file)), source_path=str(csv_file))
+        q = Q(_load_csv_to_dataframe(str(csv_file)), source_path=str(csv_file))
         other = Q(pd.DataFrame({'id': [1, 3]}))
         
         # Chain: lambda -> semi-join -> lambda -> anti-join
@@ -748,7 +748,7 @@ class TestQReplayReload:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("price,qty\n10,2\n20,3\n")
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         q = Q(df, source_path=str(csv_file))
         q2 = q.assign(total=lambda x: x.price * x.qty)
         
@@ -765,7 +765,7 @@ class TestQReplayReload:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("price,qty\n10,2\n")
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         q = Q(df, source_path=str(csv_file))
         
         # Remove a column
@@ -1670,8 +1670,8 @@ class TestQReloadRecursive:
         csv2.write_text("x\n3\n4\n")
         
         # Load and concat
-        df1 = load_csv(str(csv1))
-        df2 = load_csv(str(csv2))
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
         q1 = Q(df1, source_path=str(csv1))
         q2 = Q(df2, source_path=str(csv2))
         q3 = q1.concat(q2)
@@ -1692,7 +1692,7 @@ class TestQReloadRecursive:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("x\n1\n2\n")
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         q = Q(df, source_path=str(csv_file))
         q2 = q.sample(1, random_state=42)  # Reproducible
         
@@ -1845,8 +1845,8 @@ class TestQEdgeCases:
         csv1.write_text("id,name\n1,Alice\n")
         csv2.write_text("id,age\n1,30\n")
         
-        df1 = load_csv(str(csv1))
-        df2 = load_csv(str(csv2))
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
         q1 = Q(df1, source_path=str(csv1))
         q2 = Q(df2, source_path=str(csv2))
         q3 = q1.merge(q2, on='id')

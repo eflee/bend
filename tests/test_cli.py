@@ -1,8 +1,10 @@
 """Tests for bend.cli module."""
 
 import sys
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import pytest
+import pandas as pd
+from bend import Q
 
 
 class TestCLI:
@@ -15,12 +17,10 @@ class TestCLI:
             from bend.cli import main
             main()
         
-        # Should launch IPython with None for df, q, r
+        # Should launch IPython with None for q
         mock_ipython.assert_called_once()
         call_kwargs = mock_ipython.call_args[1]
-        assert call_kwargs['user_ns']['df'] is None
         assert call_kwargs['user_ns']['q'] is None
-        assert call_kwargs['user_ns']['r'] is None
 
     def test_help_argument(self):
         """Should display help message."""
@@ -34,10 +34,8 @@ class TestCLI:
     @patch('IPython.start_ipython')
     def test_with_csv_file_launches_ipython(self, mock_ipython, mock_load):
         """Should load CSV and launch IPython when file provided."""
-        import pandas as pd
-        
-        mock_df = pd.DataFrame({"x": [1, 2, 3]})
-        mock_load.return_value = mock_df
+        mock_q = Q(pd.DataFrame({"x": [1, 2, 3]}))
+        mock_load.return_value = mock_q
         
         with patch.object(sys, 'argv', ['bend', 'test.csv']):
             from bend.cli import main
@@ -50,10 +48,8 @@ class TestCLI:
     @patch('IPython.start_ipython')
     def test_with_skip_rows_argument(self, mock_ipython, mock_load):
         """Should pass skip_rows argument to load_csv."""
-        import pandas as pd
-        
-        mock_df = pd.DataFrame({"x": [1, 2, 3]})
-        mock_load.return_value = mock_df
+        mock_q = Q(pd.DataFrame({"x": [1, 2, 3]}))
+        mock_load.return_value = mock_q
         
         with patch.object(sys, 'argv', ['bend', 'test.csv', '--skip-rows', '3']):
             from bend.cli import main

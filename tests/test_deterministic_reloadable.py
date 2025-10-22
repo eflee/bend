@@ -4,7 +4,8 @@ import pytest
 import pandas as pd
 import tempfile
 from pathlib import Path
-from bend.core import Q, load_csv
+from bend import Q
+from bend.core import _load_csv_to_dataframe
 
 
 class TestDeterministicFlag:
@@ -81,7 +82,7 @@ class TestReloadableFlag:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("x\n1\n2\n")
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         q = Q(df, source_path=str(csv_file))
         assert q.reloadable
     
@@ -96,7 +97,7 @@ class TestReloadableFlag:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("x\n1\n2\n3\n")
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         q = Q(df, source_path=str(csv_file))
         q2 = q.assign(y=lambda x: x.x * 2).filter(lambda x: x.y > 2)
         assert q2.reloadable
@@ -106,7 +107,7 @@ class TestReloadableFlag:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("x\n1\n2\n3\n")
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         q = Q(df, source_path=str(csv_file))
         assert q.reloadable
         
@@ -120,8 +121,8 @@ class TestReloadableFlag:
         csv1.write_text("x\n1\n")
         csv2.write_text("x\n2\n")
         
-        df1 = load_csv(str(csv1))
-        df2 = load_csv(str(csv2))
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
         q1 = Q(df1, source_path=str(csv1))
         q2 = Q(df2, source_path=str(csv2))
         
@@ -141,8 +142,8 @@ class TestReloadableFlag:
         csv1.write_text("x\n1\n")
         csv2.write_text("x\n2\n")
         
-        df1 = load_csv(str(csv1))
-        df2 = load_csv(str(csv2))
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
         q1 = Q(df1, source_path=str(csv1))
         q2 = Q(df2, source_path=str(csv2))
         q3 = q1.concat(q2, deep_copy=False)
@@ -159,8 +160,8 @@ class TestReloadWithPartialReload:
         csv1.write_text("x\n1\n2\n")
         csv2.write_text("x\n3\n4\n")
         
-        df1 = load_csv(str(csv1))
-        df2 = load_csv(str(csv2))
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
         q1 = Q(df1, source_path=str(csv1))
         q2 = Q(df2, source_path=str(csv2))
         
@@ -179,8 +180,8 @@ class TestReloadWithPartialReload:
         csv1.write_text("x\n1\n2\n")
         csv2.write_text("x\n3\n4\n")
         
-        df1 = load_csv(str(csv1))
-        df2 = load_csv(str(csv2))
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
         q1 = Q(df1, source_path=str(csv1))
         q2 = Q(df2, source_path=str(csv2))
         
@@ -223,7 +224,7 @@ class TestRebaseFlags:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("x\n" + "\n".join(str(i) for i in range(100)))
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         q = Q(df, source_path=str(csv_file))
         
         # Make non-deterministic
@@ -239,7 +240,7 @@ class TestRebaseFlags:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("x\n1\n2\n3\n")
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         q = Q(df, source_path=str(csv_file))
         assert q.reloadable
         
@@ -251,7 +252,7 @@ class TestRebaseFlags:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("x\n1\n2\n3\n")
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         q = Q(df, source_path=str(csv_file))
         q2 = q.filter(lambda x: x.x > 1).rebase()
         
@@ -274,8 +275,8 @@ class TestFlagPropagationMultiQ:
         csv1.write_text("id,x\n1,10\n2,20\n")
         csv2.write_text("id,y\n1,100\n2,200\n")
         
-        df1 = load_csv(str(csv1))
-        df2 = load_csv(str(csv2))
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
         q1 = Q(df1, source_path=str(csv1))
         q2 = Q(df2, source_path=str(csv2))
         
@@ -303,8 +304,8 @@ class TestFlagPropagationMultiQ:
         csv1.write_text("x\n1\n2\n")
         csv2.write_text("x\n2\n3\n")
         
-        df1 = load_csv(str(csv1))
-        df2 = load_csv(str(csv2))
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
         q1 = Q(df1, source_path=str(csv1))
         q2 = Q(df2, source_path=str(csv2))
         
@@ -319,8 +320,8 @@ class TestFlagPropagationMultiQ:
         csv1.write_text("x\n1\n2\n3\n")
         csv2.write_text("x\n2\n3\n4\n")
         
-        df1 = load_csv(str(csv1))
-        df2 = load_csv(str(csv2))
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
         q1 = Q(df1, source_path=str(csv1))
         q2 = Q(df2, source_path=str(csv2))
         
@@ -341,8 +342,8 @@ class TestFlagPropagationMultiQ:
         csv1.write_text("x\n1\n2\n3\n")
         csv2.write_text("x\n2\n3\n4\n")
         
-        df1 = load_csv(str(csv1))
-        df2 = load_csv(str(csv2))
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
         q1 = Q(df1, source_path=str(csv1))
         q2 = Q(df2, source_path=str(csv2))
         
@@ -388,7 +389,7 @@ class TestReplayVsReload:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("x\n1\n2\n3\n")
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         q = Q(df, source_path=str(csv_file))
         q2 = q.assign(y=lambda x: x.x * 2)
         

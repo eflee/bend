@@ -6,7 +6,7 @@ import argparse
 import math
 import pandas as pd
 
-from .core import Q, load_csv, rows
+from . import load_csv, dump_csv, Q, rows
 
 
 def main():
@@ -31,78 +31,90 @@ def main():
     
     # Load CSV if provided
     if args.csv_file:
-        df = load_csv(args.csv_file, skip_rows=args.skip_rows)
-        q = Q(df, source_path=args.csv_file, skip_rows=args.skip_rows)
-        r = list(rows(df))
+        q = load_csv(args.csv_file, skip_rows=args.skip_rows)
         
         banner = (
-            "Loaded as:\n"
-            "  q   -> Q object with tracked change history\n"
-            "  df  -> pandas.DataFrame (for pandas compatibility)\n"
-            "Helpers:\n"
-            "  rows(df), load_csv(url), reload(), replay()\n"
+            f"Bend REPL - Loaded {q.rows} rows × {len(q.columns)} columns as 'q'\n"
+            "\n"
+            "Available functions:\n"
+            "  load_csv(path)     : Load a CSV file into a Q\n"
+            "  dump_csv(q, path)  : Save a Q to a CSV file\n"
+            "  rows(q)            : Iterate over Q rows as namedtuples\n"
             "\n"
             "Examples:\n"
-            "  q.columns, q.rows  # discover shape\n"
-            "  q.assign(total=lambda x: x.price * x.qty)  # add computed columns\n"
-            "  q.filter(lambda x: x.region == 'CA')  # filter rows\n"
-            "  q.to_df()  # get DataFrame copy for pandas operations\n"
-            "  for row in q: print(row.name)  # iterate over rows\n"
-            "  q.dump('out.csv')  # write to CSV\n"
+            "  q.columns, q.rows                           # discover shape\n"
+            "  q.filter(lambda x: x.price > 100)           # filter rows\n"
+            "  q.assign(total=lambda x: x.price * x.qty)   # add computed columns\n"
+            "  q2 = load_csv('other.csv')                  # load another file\n"
+            "  q.filter(q2, on='id')                       # semi-join\n"
+            "  dump_csv(q.filter(...), 'output.csv')       # export result\n"
+            "\n"
+            "Type 'q' to see your data!\n"
         )
     else:
         # No file loaded, just provide helpers
-        df = None
         q = None
-        r = None
         
         banner = (
             "Bend REPL - No data loaded\n"
             "\n"
             "Load data:\n"
-            "  df = load_csv('data.csv')  # or URL\n"
-            "  q = Q(df, source_path='data.csv')\n"
+            "  q = load_csv('data.csv')  # or URL\n"
             "\n"
-            "Or with type conversion:\n"
-            "  df = load_csv('data.csv', dtype={'age': int, 'price': float})\n"
-            "  q = Q(df)\n"
+            "With options:\n"
+            "  q = load_csv('data.csv', dtype={'age': int, 'price': float})\n"
+            "  q = load_csv('data.csv', skip_rows=3)\n"
+            "\n"
+            "Export data:\n"
+            "  dump_csv(q, 'output.csv')\n"
             "\n"
             "Examples:\n"
-            "  q.columns, q.rows  # discover shape\n"
-            "  q.assign(total=lambda x: x.price * x.qty)  # add computed columns\n"
-            "  q.filter(lambda x: x.region == 'CA')  # filter rows\n"
+            "  q.filter(lambda x: x.region == 'CA')        # filter rows\n"
+            "  q.assign(total=lambda x: x.price * x.qty)   # add columns\n"
+            "  q2 = load_csv('other.csv')                  # load another file\n"
+            "  q.merge(q2, on='id', how='left')            # join datasets\n"
         )
     
     # Helper functions for the REPL
-    def reload():
+    def r():
         """Reload data from source file and re-apply all tracked changes.
         
-        Returns the reloaded Q object. You can reassign to q:
-            q = reload()
+        Shortcut for: q = q.reload()
         """
+        nonlocal q
         if q is None:
-            raise ValueError("No Q object loaded. Load a CSV first.")
-        return q.reload()
-    
-    def replay():
-        """Re-apply all tracked changes to the in-memory base data.
-        
-        Returns the replayed Q object. You can reassign to q:
-            q = replay()
-        """
-        if q is None:
-            raise ValueError("No Q object loaded. Load a CSV first.")
-        return q.replay()
+            raise ValueError("No Q object loaded. Load a CSV first with: q = load_csv('file.csv')")
+        q = q.reload()
+        print(f"Reloaded {q.rows} rows × {len(q.columns)} columns")
+        return q
 
     try:
         from IPython import start_ipython
         import builtins
-        ns = dict(df=df, q=q, r=r, rows=rows, load_csv=load_csv, reload=reload, replay=replay, math=math, pd=pd, Q=Q)
+        ns = dict(
+            q=q,
+            load_csv=load_csv,
+            dump_csv=dump_csv,
+            rows=rows,
+            r=r,
+            Q=Q,
+            math=math,
+            pd=pd
+        )
         builtins.__dict__.update(ns)
         start_ipython(argv=[], user_ns=ns, display_banner=True)
     except Exception:
         import code
-        ns = dict(df=df, q=q, r=r, rows=rows, load_csv=load_csv, reload=reload, replay=replay, math=math, pd=pd, Q=Q)
+        ns = dict(
+            q=q,
+            load_csv=load_csv,
+            dump_csv=dump_csv,
+            rows=rows,
+            r=r,
+            Q=Q,
+            math=math,
+            pd=pd
+        )
         code.interact(banner=banner, local=ns)
 
 

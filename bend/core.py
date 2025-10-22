@@ -27,8 +27,10 @@ def _gsheets_csv(url: str) -> str:
     return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
 
 
-def load_csv(path_or_url: str, skip_rows: int = 0, dtype: dict = None) -> pd.DataFrame:
-    """Load a CSV file from a local path, URL, or Google Sheets URL.
+def _load_csv_to_dataframe(path_or_url: str, skip_rows: int = 0, dtype: dict = None) -> pd.DataFrame:
+    """Internal helper: Load a CSV file to a pandas DataFrame.
+    
+    This is an internal function. Users should use bend.load_csv() which returns a Q.
     
     Args:
         path_or_url: Path to a local CSV file, a URL, or a Google Sheets URL
@@ -38,9 +40,6 @@ def load_csv(path_or_url: str, skip_rows: int = 0, dtype: dict = None) -> pd.Dat
         
     Returns:
         A pandas DataFrame containing the CSV data
-        
-    Example:
-        >>> load_csv('data.csv', dtype={'age': int, 'price': float})
     """
     u = _gsheets_csv(path_or_url)
     kwargs = {}
@@ -1343,7 +1342,7 @@ class Q:
                 new_changes.append((change_type, change_data))
         
         # Reload this Q's data from source
-        new_base = load_csv(self._source_path, skip_rows=self._skip_rows)
+        new_base = _load_csv_to_dataframe(self._source_path, skip_rows=self._skip_rows)
         
         # Validate that all original base columns still exist
         original_cols = set(self._base_df.columns)

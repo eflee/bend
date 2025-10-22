@@ -4,7 +4,8 @@ import pytest
 import pandas as pd
 import tempfile
 import os
-from bend.core import Q, load_csv, rows
+from bend import Q
+from bend.core import _load_csv_to_dataframe, rows
 
 
 class TestReadmeExamples:
@@ -134,7 +135,7 @@ class TestReadmeExamples:
         csv_file = tmp_path / "daily_sales.csv"
         csv_file.write_text("sales,units\n100,5\n200,10\n")
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         q = Q(df, source_path=str(csv_file))
         q2 = q.assign(commission=lambda x: x.sales * 0.15)
         
@@ -439,7 +440,7 @@ class TestEdgeCases:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("x,y\n1,2\n")
         
-        df = load_csv(str(csv_file))
+        df = _load_csv_to_dataframe(str(csv_file))
         q = Q(df, source_path=str(csv_file))
         
         # Add a new column to file
