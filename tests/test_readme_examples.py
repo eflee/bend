@@ -1,6 +1,5 @@
 """Test examples from README to ensure they work as described."""
 
-
 import pandas as pd
 
 from bend import Q

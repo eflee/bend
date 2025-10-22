@@ -251,7 +251,9 @@ class Q:
                         if left_col in merged.columns and right_col in merged.columns:
                             # Apply resolution lambda row-by-row
                             # Use default args to bind loop variables
-                            def apply_resolve(row, left_col=left_col, right_col=right_col, resolve_fn=resolve_fn):
+                            def apply_resolve(
+                                row, left_col=left_col, right_col=right_col, resolve_fn=resolve_fn
+                            ):
                                 left_val = row[left_col]
                                 right_val = row[right_col]
                                 return resolve_fn(left_val, right_val)
@@ -1655,7 +1657,11 @@ class Q:
         # For multi-Q operations, this could include entire Q objects
         changes_mem = 0
         for change_type, change_data in self._changes:
-            if change_type in ("merge", "concat", "join") and isinstance(change_data, dict) and "other" in change_data:
+            if (
+                change_type in ("merge", "concat", "join")
+                and isinstance(change_data, dict)
+                and "other" in change_data
+            ):
                 # If change_data contains a Q object, count its memory
                 other_q = change_data["other"]
                 if isinstance(other_q, Q):

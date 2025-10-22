@@ -1,6 +1,5 @@
 """Tests for bend.core module with new architecture."""
 
-
 import numpy as np
 import pandas as pd
 import pytest
