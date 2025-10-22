@@ -883,13 +883,10 @@ class TestQDropSelect:
         q2 = q.drop("b")
 
         # Trying to use dropped column should fail
-        try:
+        with pytest.raises(AttributeError):
             q3 = q2.assign(c=lambda x: x.b * 2)
-            # If we get here, it should fail when we access the data
+            # Force evaluation
             list(q3)
-            assert False, "Should have raised AttributeError"
-        except AttributeError:
-            pass  # Expected
 
     def test_select_keeps_specified(self):
         """Should keep only specified columns."""
@@ -1140,7 +1137,7 @@ class TestQConcat:
 
         # Verify it's a deep copy by checking we can modify original
         # and it doesn't affect the concat result
-        q4 = q2.assign(y=lambda x: x.x * 2)
+        _q4 = q2.assign(y=lambda x: x.x * 2)  # noqa: F841 - intentionally unused
         q5 = q3.replay()
 
         # q3 should still have original q2 data (no y column)
@@ -1327,7 +1324,7 @@ class TestQMerge:
         assert q3.deterministic
 
         # Verify it's a deep copy
-        q4 = q2.assign(salary=lambda x: 50000)
+        _q4 = q2.assign(salary=lambda x: 50000)  # noqa: F841 - intentionally unused
         q5 = q3.replay()
 
         # q3 should still have original q2 data (no salary column)
@@ -1743,8 +1740,8 @@ class TestQIntegration:
         assert change_types == ["assign", "filter", "assign", "sort", "head"]
 
 
-class TestQMemoryUsage:
-    """Tests for Q.memory_usage() method."""
+class TestQMemoryUsageBasic:
+    """Tests for Q.memory_usage() method - basic tests."""
 
     def test_memory_usage_simple(self):
         """Should report memory for simple Q."""
@@ -1798,7 +1795,7 @@ class TestQEdgeCases:
 
         # Only resolve one of two conflicts
         with pytest.raises(ValueError, match="Missing resolution"):
-            q1.merge(q2, on="id", resolve={"status": lambda l, r: l})
+            q1.merge(q2, on="id", resolve={"status": lambda left, right: left})
 
     def test_reload_with_merge(self, tmp_path):
         """Should handle reload with merge operation."""

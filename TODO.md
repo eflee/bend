@@ -293,7 +293,7 @@ q = session['q']
 
 **Visualization Style (Recommended):**
 
-```
+```text
 Q Pipeline (5 operations, deterministic: True, reloadable: True)
 ├─ assign(total=<lambda>)
 ├─ filter(<lambda>)

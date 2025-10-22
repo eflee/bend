@@ -221,10 +221,7 @@ class Q:
                 other_df = other_q._apply_changes(other_q._base_df, other_q._changes)
 
                 # Detect and resolve column conflicts
-                if isinstance(on, str):
-                    on_cols = {on}
-                else:
-                    on_cols = set(on)
+                on_cols = {on} if isinstance(on, str) else set(on)
 
                 conflicts = set(result.columns) & set(other_df.columns) - on_cols
 
@@ -253,7 +250,8 @@ class Q:
 
                         if left_col in merged.columns and right_col in merged.columns:
                             # Apply resolution lambda row-by-row
-                            def apply_resolve(row):
+                            # Use default args to bind loop variables
+                            def apply_resolve(row, left_col=left_col, right_col=right_col, resolve_fn=resolve_fn):
                                 left_val = row[left_col]
                                 right_val = row[right_col]
                                 return resolve_fn(left_val, right_val)
@@ -308,10 +306,7 @@ class Q:
         Internal method used by filter() with Q parameter.
         """
         # Normalize 'on' to list
-        if isinstance(on, str):
-            on_cols = [on]
-        else:
-            on_cols = list(on)
+        on_cols = [on] if isinstance(on, str) else list(on)
 
         # Validate columns exist in self
         missing_in_self = [col for col in on_cols if col not in self._df.columns]
@@ -345,10 +340,7 @@ class Q:
         Internal method used by filter() with Q parameter and inverse=True.
         """
         # Normalize 'on' to list
-        if isinstance(on, str):
-            on_cols = [on]
-        else:
-            on_cols = list(on)
+        on_cols = [on] if isinstance(on, str) else list(on)
 
         # Validate columns exist in both
         missing_in_self = [col for col in on_cols if col not in self._df.columns]
@@ -596,7 +588,9 @@ class Q:
 
             if inverse:
                 # Wrap function to invert logic
-                inverted_fn = lambda row: not fn(row)
+                def inverted_fn(row):
+                    return not fn(row)
+
                 new_changes = self._changes + [("filter", inverted_fn)]
             else:
                 new_changes = self._changes + [("filter", fn)]
@@ -1051,10 +1045,7 @@ class Q:
             other_copy = other
 
         # Normalize on parameter
-        if isinstance(on, str):
-            on_param = on
-        else:
-            on_param = list(on)
+        on_param = on if isinstance(on, str) else list(on)
 
         new_changes = self._changes + [
             (
@@ -1664,12 +1655,11 @@ class Q:
         # For multi-Q operations, this could include entire Q objects
         changes_mem = 0
         for change_type, change_data in self._changes:
-            if change_type in ("merge", "concat", "join"):
+            if change_type in ("merge", "concat", "join") and isinstance(change_data, dict) and "other" in change_data:
                 # If change_data contains a Q object, count its memory
-                if isinstance(change_data, dict) and "other" in change_data:
-                    other_q = change_data["other"]
-                    if isinstance(other_q, Q):
-                        changes_mem += other_q.memory_usage(deep=deep)["total"]
+                other_q = change_data["other"]
+                if isinstance(other_q, Q):
+                    changes_mem += other_q.memory_usage(deep=deep)["total"]
 
         total = current_mem + base_mem + changes_mem
 

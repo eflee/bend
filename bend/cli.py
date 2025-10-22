@@ -93,13 +93,13 @@ def main():
 
         from IPython import start_ipython
 
-        ns = dict(q=q, load_csv=load_csv, dump_csv=dump_csv, r=r, Q=Q, math=math, pd=pd)
+        ns = {"q": q, "load_csv": load_csv, "dump_csv": dump_csv, "r": r, "Q": Q, "math": math, "pd": pd}
         builtins.__dict__.update(ns)
         start_ipython(argv=[], user_ns=ns, display_banner=True)
     except Exception:
         import code
 
-        ns = dict(q=q, load_csv=load_csv, dump_csv=dump_csv, r=r, Q=Q, math=math, pd=pd)
+        ns = {"q": q, "load_csv": load_csv, "dump_csv": dump_csv, "r": r, "Q": Q, "math": math, "pd": pd}
         code.interact(banner=banner, local=ns)
 
 

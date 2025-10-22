@@ -336,7 +336,7 @@ q3.deterministic  # True - empty history is deterministic!
 
 ### Conceptual Diagram
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │            Your Q Object                │
 ├─────────────────────────────────────────┤
