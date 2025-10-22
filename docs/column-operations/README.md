@@ -5,9 +5,13 @@ Managing, renaming, and controlling column visibility.
 ## Methods
 
 ### [drop()](drop.md) - Remove columns permanently
+
 ### [select()](select.md) - Keep only specified columns  
+
 ### [rename()](rename.md) - Rename columns
+
 ### [hide()](hide.md) - Hide from display only
+
 ### [unhide()](unhide.md) - Unhide columns
 
 ## Structural vs Display

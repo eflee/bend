@@ -5,6 +5,7 @@ Combining multiple Q objects through joins, unions, and set operations.
 ## Methods
 
 ### [merge()](merge.md)
+
 Join Q objects with explicit conflict resolution.
 
 **When to use**: Complex joins, column conflicts, custom merge logic
@@ -14,6 +15,7 @@ q1.merge(q2, on='id', resolve={'status': lambda l, r: l})
 ```
 
 ### [join()](join.md)
+
 Simple join wrapper (no conflicts).
 
 **When to use**: Standard joins without column conflicts
@@ -23,6 +25,7 @@ customers.join(orders, on='customer_id', how='left')
 ```
 
 ### [concat()](concat.md)
+
 Vertical stacking (keeps duplicates).
 
 **When to use**: Combining time series, appending batches
@@ -32,6 +35,7 @@ jan.concat(feb).concat(mar)
 ```
 
 ### [union()](union.md)
+
 Vertical stacking with deduplication.
 
 **When to use**: Combining similar datasets, removing duplicates
@@ -41,6 +45,7 @@ west.union(east)  # Unique rows from both
 ```
 
 ### [intersect()](intersect.md)
+
 Rows present in both Q objects.
 
 **When to use**: Finding common records, validation
@@ -50,6 +55,7 @@ expected.intersect(actual)
 ```
 
 ### [difference()](difference.md)
+
 Rows in self but not in other.
 
 **When to use**: Finding missing/extra records, change detection
@@ -84,6 +90,7 @@ q1.merge(huge_q, on='id', deep_copy=False)
 ## Common Patterns
 
 ### Customer-Order Enrichment
+
 ```python
 enriched = (customers
     .join(orders, on='customer_id', how='left')
@@ -92,6 +99,7 @@ enriched = (customers
 ```
 
 ### Data Validation
+
 ```python
 missing = expected.difference(actual)
 extra = actual.difference(expected)
@@ -99,6 +107,7 @@ matches = expected.intersect(actual)
 ```
 
 ### Time Series Union
+
 ```python
 all_data = (jan.union(feb).union(mar).union(apr))
 ```

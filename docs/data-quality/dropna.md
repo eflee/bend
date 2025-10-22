@@ -54,12 +54,14 @@ result = (q
 ## Use Cases
 
 ### Remove Incomplete Records
+
 ```python
 # Remove rows missing critical fields
 clean = orders.dropna('order_id', 'customer_id', 'total')
 ```
 
 ### Conditional Cleaning
+
 ```python
 # Remove rows only if key contact info is completely missing
 contacts = (customers
@@ -69,6 +71,7 @@ contacts = (customers
 ```
 
 ### Data Quality Pipeline
+
 ```python
 validated = (raw_data
     .dropna('id')                  # ID is required
@@ -80,6 +83,7 @@ validated = (raw_data
 ## Gotchas
 
 ### All Columns vs Specific Columns
+
 ```python
 df = DataFrame({'a': [1, None], 'b': [2, 3]})
 q = Q(df)
@@ -92,6 +96,7 @@ q.dropna('a')
 ```
 
 ### String 'None' vs Actual None
+
 ```python
 # dropna() only removes pandas null/NaN, not string 'None'
 df = DataFrame({'a': [1, 'None', 3]})
@@ -102,6 +107,7 @@ q.filter(lambda x: x.a != 'None')
 ```
 
 ### Empty Result
+
 ```python
 # If all rows have nulls, result is empty
 df = DataFrame({'a': [None, None], 'b': [None, None]})

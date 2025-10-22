@@ -32,18 +32,21 @@ q2 = q.distinct('email', 'phone')
 ## Use Cases
 
 ### 1. Data Quality
+
 ```python
 # Remove duplicate records
 clean = q.distinct()
 ```
 
 ### 2. Unique Entities
+
 ```python
 # One row per customer
 unique_customers = q.distinct('customer_id')
 ```
 
 ### 3. After Union
+
 ```python
 # Combine and deduplicate
 all_records = q1.concat(q2).distinct()

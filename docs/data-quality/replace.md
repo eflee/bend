@@ -67,6 +67,7 @@ result = (q
 ## Use Cases
 
 ### Standardize Legacy Values
+
 ```python
 # Update old codes to new standards
 standardized = (data
@@ -86,6 +87,7 @@ standardized = (data
 ```
 
 ### Clean Categorical Data
+
 ```python
 # Fix inconsistent categorical values
 cleaned = (survey
@@ -103,6 +105,7 @@ cleaned = (survey
 ```
 
 ### Replace Sentinel Values
+
 ```python
 # Replace sentinel/magic numbers with proper nulls
 cleaned = (data
@@ -113,6 +116,7 @@ cleaned = (data
 ```
 
 ### Status Transitions
+
 ```python
 # Update status values in bulk
 updated = (orders
@@ -128,6 +132,7 @@ updated = (orders
 ## Gotchas
 
 ### Replace vs fillna
+
 ```python
 # replace() doesn't work on NaN like fillna does
 q.replace(np.nan, 0)  # Works, but...
@@ -137,6 +142,7 @@ q.fillna(0)
 ```
 
 ### Column-Specific vs Global
+
 ```python
 # Be careful with dict syntax
 
@@ -148,6 +154,7 @@ q.replace({'CA': 'California'})  # Affects ALL columns
 ```
 
 ### Partial Replacements
+
 ```python
 # Unmapped values remain unchanged
 q.replace({'status': {'old': 'inactive'}})
@@ -155,6 +162,7 @@ q.replace({'status': {'old': 'inactive'}})
 ```
 
 ### Type Coercion
+
 ```python
 # Replacing with different type may cause issues
 df = DataFrame({'count': [1, 2, 3]})
@@ -162,6 +170,7 @@ q.replace(2, 'two')  # May result in mixed types
 ```
 
 ### No Change If No Matches
+
 ```python
 # If value doesn't exist, replace has no effect
 q.replace(999, 0)  # No rows have 999, no changes made
@@ -184,6 +193,7 @@ q.replace({'status': {'old': 'inactive'}}).replace({'status': {'new': 'active'}}
 ## Common Patterns
 
 ### Data Normalization
+
 ```python
 # Normalize categorical values to standard format
 normalized = (raw_data
@@ -198,6 +208,7 @@ normalized = (raw_data
 ```
 
 ### Boolean Conversion
+
 ```python
 # Convert string booleans to actual booleans
 # (Note: this changes type, be careful)
@@ -207,6 +218,7 @@ converted = (data
 ```
 
 ### Redaction/Anonymization
+
 ```python
 # Replace sensitive values
 anonymized = (customer_data
@@ -218,6 +230,7 @@ anonymized = (customer_data
 ```
 
 ### Fix Data Entry Errors
+
 ```python
 # Correct common typos/errors
 corrected = (survey
@@ -245,6 +258,7 @@ corrected = (survey
 ✅ **Yes** - Stored as `("replace", {mapping})` in change history.
 
 This means:
+
 - `replay()` will re-apply the replacement
 - `reload()` will reload data then re-apply the replacement
 - `rebase()` will bake the replacement into the base DataFrame

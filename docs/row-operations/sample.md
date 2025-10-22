@@ -64,11 +64,13 @@ group_b = q.difference(group_a)
 ## Gotchas
 
 ### Sample Size > Dataset
+
 ```python
 q.sample(1000)  # If q has 100 rows, raises ValueError
 ```
 
 ### Non-Deterministic by Default
+
 ```python
 q2 = q.sample(100)
 q3 = q2.reload()  # Different 100 rows!
@@ -81,6 +83,7 @@ q3 = q2.reload()  # Same 100 rows
 ## Idempotency
 
 ⚠️ **Conditional**
+
 - **No** if `random_state=None` (default)
 - **Yes** if `random_state` is specified
 

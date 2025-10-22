@@ -12,6 +12,7 @@ cols = q.cols     # Alias for columns
 ```
 
 **Use in lambdas:**
+
 ```python
 # Check what columns are available
 print(q.columns)
@@ -31,11 +32,13 @@ count = q.rows  # 1523
 ```
 
 Equivalent to `len(q)`:
+
 ```python
 assert q.rows == len(q)
 ```
 
 **Use for reporting:**
+
 ```python
 print(f"{q.rows} rows × {len(q.columns)} columns")
 ```

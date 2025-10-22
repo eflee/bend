@@ -1,0 +1,20 @@
+{
+  "name": "bend",
+  "version": "2.1.0",
+  "description": "Development tooling for Bend project",
+  "private": true,
+  "scripts": {
+    "lint": "npm run lint:md && npm run lint:py",
+    "lint:md": "markdownlint-cli2 '**/*.md' '#node_modules' '#venv'",
+    "lint:md:fix": "markdownlint-cli2 --fix '**/*.md' '#node_modules' '#venv'",
+    "lint:py": "cd .. && python -m ruff check bend/ tests/",
+    "lint:py:fix": "cd .. && python -m ruff check --fix bend/ tests/",
+    "format": "npm run format:md && npm run format:py",
+    "format:md": "npm run lint:md:fix",
+    "format:py": "cd .. && python -m black bend/ tests/ && python -m ruff check --fix bend/ tests/"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "^0.11.0"
+  }
+}
+

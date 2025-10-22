@@ -5,6 +5,7 @@ This section covers fundamental concepts in Bend that help you understand how th
 ## Essential Reading
 
 **[Understanding Determinism & Reloadability](understanding-determinism-reloadability.md)** - Comprehensive guide to understanding:
+
 - **Replayability** - Re-executing operations from memory
 - **Reloadability** - Reloading from source files
 - **Determinism** - Guaranteeing same results from same input

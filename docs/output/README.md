@@ -5,6 +5,7 @@ Displaying and exporting data.
 ## Methods
 
 ### [show()](show.md)
+
 Print preview to console.
 
 ```python
@@ -12,6 +13,7 @@ q.show(50)  # Print 50 rows
 ```
 
 ### [to_df()](to_df.md)
+
 Export to pandas DataFrame.
 
 ```python
@@ -20,6 +22,7 @@ df = q.to_df()
 ```
 
 ### [dump()](dump.md)
+
 Export to CSV file.
 
 ```python

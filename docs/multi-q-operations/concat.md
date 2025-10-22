@@ -31,6 +31,7 @@ combined = q1.concat(q2)  # 150 rows
 ## Use Cases
 
 ### 1. Combining Time Series Data
+
 ```python
 jan_sales = load_csv('sales_jan.csv')
 feb_sales = load_csv('sales_feb.csv')
@@ -40,6 +41,7 @@ q1 = Q(jan_sales).concat(Q(feb_sales)).concat(Q(mar_sales))
 ```
 
 ### 2. Merging Multiple Sources
+
 ```python
 # Combine data from different sources
 online = load_csv('online_orders.csv')
@@ -54,6 +56,7 @@ all_orders = (Q(online)
 ```
 
 ### 3. Appending New Data
+
 ```python
 existing = Q(existing_df)
 new_batch = Q(new_df)
@@ -64,6 +67,7 @@ updated = existing.concat(new_batch)
 ## Column Handling
 
 ### Matching Columns
+
 ```python
 # Both have same columns
 q1 = Q(pd.DataFrame({'a': [1, 2], 'b': [3, 4]}))
@@ -73,6 +77,7 @@ result = q1.concat(q2)
 ```
 
 ### Mismatched Columns (Superset/Subset)
+
 ```python
 q1 = Q(pd.DataFrame({'a': [1, 2], 'b': [3, 4]}))
 q2 = Q(pd.DataFrame({'a': [5, 6], 'c': [9, 10]}))
@@ -82,6 +87,7 @@ result = q1.concat(q2)
 ```
 
 ### Completely Different Columns
+
 ```python
 q1 = Q(pd.DataFrame({'x': [1, 2]}))
 q2 = Q(pd.DataFrame({'y': [3, 4]}))
@@ -92,6 +98,7 @@ result = q1.concat(q2)
 ## Reproducibility & Deep Copy
 
 ### Deep Copy (Default)
+
 ```python
 q1 = Q(df1)
 q2 = Q(df2)
@@ -108,6 +115,7 @@ combined.reload()  # Still uses original q2 state
 ```
 
 ### Reference Mode (Performance)
+
 ```python
 large_q = Q(huge_df)  # 10M rows
 
@@ -146,6 +154,7 @@ result = q1.concat(q2)
 ## Gotchas
 
 ### 1. Duplicates Are Kept
+
 ```python
 q1 = Q(pd.DataFrame({'a': [1, 2, 3]}))
 q2 = Q(pd.DataFrame({'a': [2, 3, 4]}))
@@ -161,6 +170,7 @@ result = q1.union(q2)  # [1, 2, 3, 4]
 ```
 
 ### 2. Column Type Mismatches
+
 ```python
 q1 = Q(pd.DataFrame({'a': [1, 2]}))  # int
 q2 = Q(pd.DataFrame({'a': ['x', 'y']}))  # string
@@ -170,6 +180,7 @@ result = q1.concat(q2)
 ```
 
 ### 3. Memory with Deep Copy
+
 ```python
 # Each concat stores a full deep copy
 result = q1.concat(q2).concat(q3).concat(q4)
@@ -182,6 +193,7 @@ result = q1.concat(q2).concat(q3).concat(q4).rebase()
 ```
 
 ### 4. Order Matters
+
 ```python
 # These produce different results
 a = q1.concat(q2)  # q1 rows first, then q2 rows
@@ -236,6 +248,7 @@ result = Q(pd.concat(dfs, ignore_index=True))
 ## Idempotency
 
 ✅ **Conditional**
+
 - **Yes** if both Q objects are deterministic and `deep_copy=True` (default)
 - **No** if `deep_copy=False`
 

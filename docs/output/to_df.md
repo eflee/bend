@@ -23,18 +23,21 @@ df = q.to_df()
 ## Use Cases
 
 ### 1. Use Pandas Directly
+
 ```python
 df = q.to_df()
 result = df.groupby('category').agg({'sales': ['sum', 'mean', 'std']})
 ```
 
 ### 2. Integration with Other Libraries
+
 ```python
 df = q.to_df()
 # Use with matplotlib, seaborn, scikit-learn, etc.
 ```
 
 ### 3. Advanced Pandas Features
+
 ```python
 df = q.to_df()
 pivot = df.pivot_table(index='date', columns='category', values='sales')

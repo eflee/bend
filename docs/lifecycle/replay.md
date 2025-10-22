@@ -29,6 +29,7 @@ q3 = q2.replay()  # Same as q2
 ## Use Cases
 
 ### 1. Verify Idempotency
+
 ```python
 q2 = q.filter(...).assign(...)
 q3 = q2.replay()
@@ -38,6 +39,7 @@ assert q2.to_df().equals(q3.to_df())
 ```
 
 ### 2. After Manual DataFrame Manipulation
+
 ```python
 # Don't do this, but if you did...
 q._df['new_col'] = 123  # Manual mutation (bad!)

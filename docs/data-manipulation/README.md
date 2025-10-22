@@ -5,6 +5,7 @@ Core operations for transforming your data.
 ## Methods
 
 ### [assign()](assign.md)
+
 Add new computed columns based on existing columns.
 
 **When to use**: Adding derived fields, calculations, feature engineering
@@ -14,6 +15,7 @@ q.assign(total=lambda x: x.price * x.qty, tax=lambda x: x.total * 0.08)
 ```
 
 ### [filter()](filter.md)
+
 Keep only rows that match a condition.
 
 **When to use**: Data quality, business logic filtering, subsetting
@@ -23,6 +25,7 @@ q.filter(lambda x: x.age >= 18 and x.status == 'active')
 ```
 
 ### [map()](map.md)
+
 Transform each row into a completely new structure.
 
 **When to use**: Restructuring data, building API responses, simplifying complex data
@@ -42,6 +45,7 @@ q.map(lambda x: {'name': f"{x.first} {x.last}", 'age': x.age})
 ## Common Patterns
 
 ### ETL Chain
+
 ```python
 result = (q
     .filter(lambda x: x.valid)
@@ -51,6 +55,7 @@ result = (q
 ```
 
 ### Data Quality
+
 ```python
 clean = (q
     .filter(lambda x: x.email and '@' in x.email)

@@ -44,6 +44,7 @@ result = q1.merge(q2, on=['first_name', 'last_name'])
 ## Use Cases
 
 ### 1. Customer-Order Enrichment
+
 ```python
 # Enrich orders with customer data
 customers = load_csv('customers.csv')
@@ -56,6 +57,7 @@ enriched_orders = (Q(orders)
 ```
 
 ### 2. Multiple Joins
+
 ```python
 # Join orders with customers, products, and shipping
 result = (Q(orders)
@@ -66,6 +68,7 @@ result = (Q(orders)
 ```
 
 ### 3. Self-Joins (Employee-Manager)
+
 ```python
 employees = Q(employee_df)
 
@@ -179,6 +182,7 @@ huge_q = huge_q.filter(...)  # Changes the object q3 references
 ```
 
 **When to use `deep_copy=False`:**
+
 - Very large datasets (>1M rows) where memory is a concern
 - One-off analysis where reproducibility isn't needed
 - You're going to `rebase()` immediately after
@@ -321,6 +325,7 @@ result = (customers
 ## Idempotency
 
 ✅ **Conditional**
+
 - **Yes** if both Q objects are deterministic and `deep_copy=True` (default)
 - **No** if `deep_copy=False`
 

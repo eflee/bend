@@ -56,11 +56,13 @@ q.sort('sales', ascending=False).sort('region')  # Region primary, sales seconda
 ## Gotchas
 
 ### Empty Columns Parameter
+
 ```python
 q.sort()  # Sorts by ALL columns (may be slow)
 ```
 
 ### Null Handling
+
 Nulls sort to the end by default in pandas.
 
 ## Idempotency

@@ -3,46 +3,56 @@
 ## High Priority - Core Missing Functionality
 
 ### 1. Joining/Merging Data
+
 ```python
 q.join(other_q, on='customer_id', how='left')
 q.merge(other_q, left_on='id', right_on='user_id')
 ```
+
 **Why**: Real-world analysis almost always involves multiple datasets. Currently you'd need to drop to pandas.
 
 **Challenge**: How to track changes from two sources? Need to design change history for multi-source operations.
 
 ### 2. Deduplication
+
 ```python
 q.distinct()  # drop all duplicates
 q.distinct('customer_id')  # keep first occurrence per customer
 ```
+
 **Why**: Data quality issue in every CSV. Very common operation.
 
 **Implementation**: Straightforward - track as change type, apply via pandas drop_duplicates.
 
 ### 3. Tail + Sample
+
 ```python
 q.tail(10)  # complement to head()
 q.sample(100)  # random sample of n rows
 q.sample(0.1)  # 10% sample
 ```
+
 **Why**: Head exists but not tail. Sampling is crucial for large dataset exploration.
 
 **Implementation**: Easy - mirror head() implementation, add sample with tracking.
 
 ### 4. Select/Drop Columns
+
 ```python
 q.select('name', 'email', 'age')  # keep only these
 q.drop('internal_id', 'temp_field')  # remove these
 ```
+
 **Why**: More explicit than `hide()`. Current `map()` can do this but it's awkward.
 
 **Implementation**: Track as change, apply column selection in _apply_changes.
 
 ### 5. Rename Columns
+
 ```python
 q.rename(old_name='new_name', customer_id='cust_id')
 ```
+
 **Why**: CSV columns often have bad names. Currently you'd need to map everything.
 
 **Implementation**: Track rename mapping, apply to DataFrame.columns.
@@ -50,17 +60,20 @@ q.rename(old_name='new_name', customer_id='cust_id')
 ## Medium Priority - Data Quality & Analysis
 
 ### 6. Missing Data Handling
+
 ```python
 q.dropna()  # remove rows with any nulls
 q.dropna('email')  # remove rows where email is null
 q.fillna(0)  # fill all nulls with 0
 q.fillna({'age': 0, 'city': 'Unknown'})  # column-specific fills
 ```
+
 **Why**: Every dataset has missing data. Currently filters can check but can't fix.
 
 **Implementation**: Track as changes, use pandas fillna/dropna methods.
 
 ### 7. Window Functions
+
 ```python
 q.assign(
     cumsum_sales=lambda x: ...,  # needs window context
@@ -69,33 +82,40 @@ q.assign(
 # Or maybe:
 q.window('sales', cumsum=True, col_name='cumsum_sales')
 ```
+
 **Why**: Running totals, moving averages are common. Currently requires manual iteration.
 
 **Challenge**: Breaks Row isolation pattern - rows need context of other rows.
 
 ### 8. Value Replacement
+
 ```python
 q.replace({'region': {'CA': 'California', 'NY': 'New York'}})
 q.replace_values('status', {'old': 'new'})
 ```
+
 **Why**: Data cleaning. Currently needs `assign()` with conditional logic.
 
 **Implementation**: Track replacement mappings, apply via pandas replace.
 
 ### 9. Pivot Operations
+
 ```python
 q.pivot(index='date', columns='category', values='sales')
 q.melt(id_vars='date', value_vars=['sales', 'revenue'])  # unpivot
 ```
+
 **Why**: Reshaping is common but `map()` is too manual for this.
 
 **Challenge**: Changes column structure dramatically, hard to replay if source columns change.
 
 ### 10. Concatenation
+
 ```python
 q.concat(other_q)  # vertical stack
 Q.concat(q1, q2, q3)  # stack multiple
 ```
+
 **Why**: Combining datasets from same source (e.g., monthly files).
 
 **Challenge**: Multi-source change tracking. Similar to join issue.
@@ -103,9 +123,11 @@ Q.concat(q1, q2, q3)  # stack multiple
 ## Lower Priority - Convenience Features
 
 ### 13. Binning/Categorization
+
 ```python
 q.bin('age', bins=[0, 18, 35, 50, 100], labels=['child', 'young', 'middle', 'senior'])
 ```
+
 **Why**: Can be done with `assign()` + conditionals but verbose.
 
 **Implementation**: Could be useful helper, track as change type.
@@ -113,9 +135,11 @@ q.bin('age', bins=[0, 18, 35, 50, 100], labels=['child', 'young', 'middle', 'sen
 ## Implementation Roadmap
 
 ### Phase 0: Infrastructure (Completed)
+
 - [x] `memory_usage()` - Memory breakdown reporting
 
 ### Phase 1: Quick Wins (Easy + High Value) - ✅ COMPLETED
+
 - [x] `tail(n)` - Mirror of head() (COMPLETED)
 - [x] `sample(n, frac, random_state)` - Random sampling (COMPLETED)
   - **Note:** `sample()` is **non-idempotent by default** (`random_state=None`)
@@ -128,7 +152,9 @@ q.bin('age', bins=[0, 18, 35, 50, 100], labels=['child', 'young', 'middle', 'sen
 - [x] `rename(**mapping)` - Column renaming (COMPLETED)
 
 ### Phase 2: Multi-Q Operations - ✅ COMPLETED
+
 Implemented with **deep copy by default** approach:
+
 - [x] `deterministic` property - Track pipeline determinism (COMPLETED)
 - [x] `concat(other, deep_copy=True)` - Vertical stacking (COMPLETED)
 - [x] `merge(other, on, how, resolve, deep_copy=True)` - Join with explicit conflict resolution (COMPLETED)
@@ -137,6 +163,7 @@ Implemented with **deep copy by default** approach:
 - [x] Deep `reload()` - Recursive reload of entire Q tree from disk (COMPLETED)
 
 **Implementation notes:**
+
 - Store **deep copy** of other Q by default (`deep_copy=True`) for full reproducibility
 - Optional `deep_copy=False` for performance (marks result as non-deterministic)
 - `q.deterministic` flag propagates through operations
@@ -145,11 +172,13 @@ Implemented with **deep copy by default** approach:
 - Use `rebase()` to drop deep copies and flatten history
 
 ### Phase 3: Data Quality - ✅ COMPLETED
+
 - [x] `fillna(value)` or `fillna(mapping)` - Fill missing values (COMPLETED)
 - [x] `dropna()` or `dropna(*cols)` - Remove rows with nulls (COMPLETED)
 - [x] `replace(mapping)` - Value replacement (COMPLETED)
 
 **Implementation notes:**
+
 - `dropna()` is a **wrapper around `filter()`** for cleaner null handling
 - Supports `how='any'` (default) and `how='all'` for multi-column checks
 - `fillna()` and `replace()` tracked as change types in history
@@ -157,23 +186,28 @@ Implemented with **deep copy by default** approach:
 - Comprehensive test coverage in `tests/test_phase3.py` (29 tests, all passing)
 
 ### Phase 4: Complex Operations (Design Required)
+
 - [ ] Window functions - Row isolation vs context trade-off
 - [ ] `pivot(index, columns, values)` - Reshaping
 - [ ] `melt(id_vars, value_vars)` - Unpivoting
 
 ### Phase 5: Nice to Have
+
 - [ ] `bin(col, bins, labels)` - Categorization helper
 
 ### Phase 6: Session Management
+
 **Goal**: Allow users to save and resume working sessions
 
 **Use Cases:**
+
 - Save analysis state at end of day, resume tomorrow
 - Share working sessions with team members
 - Create checkpoints during long analysis
 - Archive completed analyses with full context
 
 **Potential Features:**
+
 - [ ] `save_session(filename)` - Save entire Q object with history
 - [ ] `load_session(filename)` - Restore Q object from disk
 - [ ] Session metadata (creation time, bend version, data sources)
@@ -182,6 +216,7 @@ Implemented with **deep copy by default** approach:
 - [ ] Session versioning for backwards compatibility
 
 **Design Considerations:**
+
 1. **Serialization Method**:
    - Use `dill` for lambda support
    - Fall back to `pickle` for simple cases
@@ -205,6 +240,7 @@ Implemented with **deep copy by default** approach:
    - Consider signing sessions
 
 **Implementation Sketch:**
+
 ```python
 # Save session
 q.save_session('analysis.bend')
@@ -219,6 +255,7 @@ q = session['q']
 ```
 
 **Challenges:**
+
 - Lambda serialization requires `dill` (not standard library)
 - Source files may move between sessions
 - REPL state is complex to capture
@@ -228,20 +265,24 @@ q = session['q']
 **Priority:** Medium - Useful for longer analyses but not critical for basic use
 
 **Related:**
+
 - Overlaps with existing serialization work (Phase 5 in current plan)
 - Could be combined with or depend on `q.save()` / `Q.load()`
 - Consider interaction with `reload()` functionality
 
 ### Phase 7: History Visualization
+
 **Goal**: Provide clear visualization of change history tree
 
 **Use Case:**
+
 - Understand complex pipelines with multi-Q operations
 - Debug unexpected behavior by inspecting operation sequence
 - Document analysis workflow for team members
 - Verify which operations broke determinism/reloadability
 
 **Potential Features:**
+
 - [ ] `show_history()` or `history()` - Tree-style ASCII visualization
 - [ ] Verbose mode - Show lambda bodies and detailed parameters
 - [ ] Compact mode - Just operation names and counts
@@ -251,6 +292,7 @@ q = session['q']
 - [ ] Max depth control - Limit recursion for very deep trees
 
 **Visualization Style (Recommended):**
+
 ```
 Q Pipeline (5 operations, deterministic: True, reloadable: True)
 ├─ assign(total=<lambda>)
@@ -264,6 +306,7 @@ Q Pipeline (5 operations, deterministic: True, reloadable: True)
 ```
 
 **API Design:**
+
 ```python
 # Default: Tree with operation summaries
 q.show_history()
@@ -284,6 +327,7 @@ q.show_history().show()
 ```
 
 **Implementation Considerations:**
+
 1. **Tree Rendering**:
    - Use box-drawing characters (├─, └─, │)
    - Handle both linear chains and branching (multi-Q ops)
@@ -312,6 +356,7 @@ q.show_history().show()
    - Mark non-deterministic/non-reloadable operations inline
 
 **Challenges:**
+
 - Lambda inspection is limited (may not get source code)
 - Deep trees can be overwhelming (need good truncation)
 - Terminal width constraints
@@ -321,12 +366,14 @@ q.show_history().show()
 **Priority:** Low-Medium - Very useful for debugging but not essential for core functionality
 
 **Alternative Approaches:**
+
 - Export to GraphViz DOT format for complex visualizations
 - Integration with `rich` library for interactive expandable trees
 - JSON export for programmatic inspection
 - HTML output for notebooks/reports
 
 **Related:**
+
 - Complements existing `q._changes` internal representation
 - Could be used in error messages to show "at this point in history..."
 - Useful for documentation and tutorials
@@ -334,6 +381,7 @@ q.show_history().show()
 ## Design Principles to Maintain
 
 **Must preserve (P0 Requirements):**
+
 - ✅ Immutable operations (all return new Q)
 - ✅ Change tracking and replay capability (`replay()`, `reload()`)
 - ✅ Q as the core object - all operations return Q
@@ -364,6 +412,7 @@ Multi-Q operations store **deep copies** of other Q objects by default for full 
 ```
 
 **Key principles:**
+
 1. **Deep copy by default**: Store `copy.deepcopy(other)` for full reproducibility
 2. **Optional reference mode**: Use `deep_copy=False` for performance (marks as non-deterministic)
 3. **Reproducibility tracking**: `q.deterministic` property propagates through all operations
@@ -373,6 +422,7 @@ Multi-Q operations store **deep copies** of other Q objects by default for full 
 7. **Self-reference protection**: Self-joins deep copy self to avoid circular references
 
 **Benefits:**
+
 - ✅ Replay preserved through deep copies (fully deterministic)
 - ✅ User freedom - continue using Q objects after merge without side effects
 - ✅ Idempotent - same operations produce same results (if deterministic=True)
@@ -381,10 +431,12 @@ Multi-Q operations store **deep copies** of other Q objects by default for full 
 - ✅ Explicit memory management via `rebase()`
 
 **Trade-offs:**
+
 - ⚠️ Higher memory usage (mitigated by `rebase()` and `deep_copy=False` option)
 - ⚠️ Column conflicts require explicit resolution (more verbose but safer)
 
 **Remaining challenges:**
+
 - How to handle operations that need row context (window functions)?
 - When to make an operation "terminal" (like groupby) vs tracked?
 - Pickling/serialization of Q objects with lambdas (see Serialization section below)
@@ -393,11 +445,13 @@ Multi-Q operations store **deep copies** of other Q objects by default for full 
 ## Serialization & Pickling
 
 **Current Status:**
+
 - ✅ Simple Q objects (no operations) are pickleable with standard `pickle`
 - ❌ Q objects with tracked changes containing lambdas are NOT pickleable
 - Root cause: Python's `pickle` module cannot serialize lambda functions
 
 **Use Cases Requiring Serialization:**
+
 - Saving analysis pipelines to disk for later replay
 - Multiprocessing (passing Q between processes)
 - Caching intermediate results
@@ -406,11 +460,13 @@ Multi-Q operations store **deep copies** of other Q objects by default for full 
 **Solutions to Implement:**
 
 ### Phase 1: Document Limitation
+
 - [ ] Document in README that Q with tracked changes is not pickleable
 - [ ] Recommend `rebase()` before pickling if replay isn't needed
 - [ ] Add example showing workaround
 
 ### Phase 2: Add dill Support
+
 - [ ] Add `dill` as optional dependency: `pip install bend[serialization]`
 - [ ] Implement pickle support using dill when available
 - [ ] Add `q.save(filename)` and `Q.load(filename)` convenience methods
@@ -448,6 +504,7 @@ def load(cls, filename: str) -> 'Q':
 ```
 
 ### Phase 3: Alternative Approaches (Future)
+
 - [ ] Investigate `cloudpickle` as alternative to dill
 - [ ] Consider storing change history as serializable format (AST, not lambdas)
 - [ ] Evaluate trade-offs of each approach
@@ -457,6 +514,7 @@ def load(cls, filename: str) -> 'Q':
 ## Memory Management
 
 **Implemented:**
+
 - [x] `memory_usage()` method - reports memory breakdown
   - Current DataFrame memory
   - Base DataFrame memory  
@@ -464,6 +522,7 @@ def load(cls, filename: str) -> 'Q':
   - Total memory usage in bytes and MB
 
 **Usage:**
+
 ```python
 q2 = q.assign(total=lambda x: x.price * x.qty)
 usage = q2.memory_usage()
@@ -481,6 +540,7 @@ usage = q4.memory_usage()  # Should be smaller
 ```
 
 **Future enhancements:**
+
 - [ ] Add warning when memory exceeds threshold
 - [ ] Add `memory_report()` with human-readable breakdown
 - [ ] Track memory delta between operations
@@ -488,6 +548,7 @@ usage = q4.memory_usage()  # Should be smaller
 ## Testing Requirements
 
 Each new feature needs:
+
 - [ ] Unit tests in test_core.py
 - [ ] README examples
 - [ ] Test in test_readme_examples.py

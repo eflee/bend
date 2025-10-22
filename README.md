@@ -172,13 +172,17 @@ Complete reference for all 40 methods and 4 properties: **[📖 Full Documentati
 ### Quick Reference by Category
 
 #### 🔧 Data Manipulation
+
 Transform and filter your data:
+
 - **[`assign()`](docs/data-manipulation/assign.md)** - Add computed columns
 - **[`filter()`](docs/data-manipulation/filter.md)** - Filter rows by condition  
 - **[`map()`](docs/data-manipulation/map.md)** - Restructure rows completely
 
 #### 🔗 Multi-Q Operations
+
 Combine multiple datasets:
+
 - **[`merge()`](docs/multi-q-operations/merge.md)** - Join with conflict resolution
 - **[`join()`](docs/multi-q-operations/join.md)** - Simple join wrapper
 - **[`concat()`](docs/multi-q-operations/concat.md)** - Vertical stacking
@@ -187,7 +191,9 @@ Combine multiple datasets:
 - **[`difference()`](docs/multi-q-operations/difference.md)** - Rows in self but not other
 
 #### 📊 Column Operations
+
 Manage columns:
+
 - **[`drop()`](docs/column-operations/drop.md)** - Remove columns permanently
 - **[`select()`](docs/column-operations/select.md)** - Keep only specified columns
 - **[`rename()`](docs/column-operations/rename.md)** - Rename columns
@@ -195,7 +201,9 @@ Manage columns:
 - **[`unhide()`](docs/column-operations/unhide.md)** - Unhide columns
 
 #### 📏 Row Operations
+
 Select and order rows:
+
 - **[`head()`](docs/row-operations/head.md)** - First n rows
 - **[`tail()`](docs/row-operations/tail.md)** - Last n rows
 - **[`sample()`](docs/row-operations/sample.md)** - Random sample
@@ -203,31 +211,41 @@ Select and order rows:
 - **[`distinct()`](docs/row-operations/distinct.md)** - Remove duplicates
 
 #### 🧹 Data Quality
+
 Handle missing values and clean data:
+
 - **[`dropna()`](docs/data-quality/dropna.md)** - Remove rows with nulls
 - **[`fillna()`](docs/data-quality/fillna.md)** - Fill missing values
 - **[`replace()`](docs/data-quality/replace.md)** - Replace specific values
 
 #### 📈 Aggregations
+
 Compute statistics:
+
 - **[`sum()`, `mean()`, `median()`, `min()`, `max()`, `count()`, `std()`, `var()`, `unique()`, `nunique()`](docs/aggregations/aggregations.md)** - All aggregation methods
 - **[`groupby()`](docs/aggregations/groupby.md)** - Group and aggregate
 
 #### 🔄 Lifecycle
+
 Manage state and history:
+
 - **[`reload()`](docs/lifecycle/reload.md)** - Reload from disk (recursive)
 - **[`replay()`](docs/lifecycle/refresh.md)** - Re-apply changes from memory
 - **[`rebase()`](docs/lifecycle/rebase.md)** - Flatten history
 - **[`memory_usage()`](docs/lifecycle/memory_usage.md)** - Memory breakdown
 
 #### 📤 Output
+
 Export and display:
+
 - **[`show()`](docs/output/show.md)** - Print preview
 - **[`to_df()`](docs/output/to_df.md)** - Export to pandas DataFrame
 - **[`dump()`](docs/output/dump.md)** - Export to CSV
 
 #### 🏷️ Properties
+
 Read-only attributes:
+
 - **[`columns` / `cols`](docs/properties/properties.md)** - Column names
 - **[`rows`](docs/properties/properties.md)** - Row count
 - **[`deterministic`](docs/properties/properties.md)** - Determinism flag
@@ -307,6 +325,7 @@ bend data.csv --skip-rows 3
 ```
 
 Or in Python:
+
 ```python
 df = load_csv('data.csv', skip_rows=3)
 ```
@@ -321,22 +340,26 @@ q = Q(df)
 ## Performance Tips
 
 1. **Filter early** - Reduce dataset size before expensive operations
+
    ```python
    q.filter(lambda x: x.region == 'CA').assign(...)  # Good
    ```
 
 2. **Use `rebase()`** - After multi-Q operations to reduce memory
+
    ```python
    result = q1.merge(huge_q, on='id').rebase()
    ```
 
 3. **Monitor memory** - Check usage periodically
+
    ```python
    usage = q.memory_usage()
    print(f"Using {usage['total_mb']} MB")
    ```
 
 4. **Drop to pandas** - For very large datasets or complex operations
+
    ```python
    df = q.to_df()
    # Use pandas directly for heavy lifting
@@ -372,21 +395,27 @@ For multi-Q operations, change history becomes a tree. `reload()` and `replay()`
 ## Troubleshooting
 
 ### "AttributeError: 'Row' object has no attribute 'x'"
+
 Column doesn't exist or was dropped. Check `q.columns`.
 
 ### "ValueError: Column conflicts detected"
+
 Use `resolve` parameter in `merge()`:
+
 ```python
 q1.merge(q2, on='id', resolve={'status': lambda left, right: left})
 ```
 
 ### "Cannot reload: no source path available"
+
 Provide `source_path` when creating Q:
+
 ```python
 q = Q(df, source_path='data.csv')
 ```
 
 ### Pipeline is non-deterministic
+
 Check `q.deterministic`. Use `random_state` in `sample()` and `deep_copy=True` in merge/concat.
 
 ## Version
@@ -396,12 +425,14 @@ Check `q.deterministic`. Use `random_state` in `sample()` and `deep_copy=True` i
 ### Changelog
 
 **2.1.0:**
+
 - Added data quality methods: `dropna()`, `fillna()`, `replace()`
 - `dropna()` as wrapper around `filter()` for removing rows with nulls
 - `fillna()` for filling missing values (scalar or column-specific mapping)
 - `replace()` for value replacement (scalar or column-specific mapping)
 
 **2.0.0:**
+
 - **BREAKING**: `extend()` renamed to `assign()` (aligns with pandas)
 - **BREAKING**: `transform()` renamed to `map()` (clearer semantics)
 - Added multi-Q operations: `merge()`, `join()`, `concat()`, `union()`, `intersect()`, `difference()`
@@ -411,6 +442,7 @@ Check `q.deterministic`. Use `random_state` in `sample()` and `deep_copy=True` i
 - Added `deep_copy` parameter to all multi-Q operations
 
 **1.1.0:**
+
 - Added `distinct()`, `rename()`, `tail()`, `sample()`, `drop()`, `select()`
 - Added `dtype` parameter to `load_csv()`
 - Added `columns`, `rows`, `memory_usage()` methods
@@ -424,6 +456,7 @@ MIT
 ## Contributing
 
 Bend is designed to be simple and focused. Before adding features, consider:
+
 - Does it fit the "pandas with training wheels" philosophy?
 - Can it be done easily with pandas via `to_df()`?
 - Does it maintain immutability and change tracking?

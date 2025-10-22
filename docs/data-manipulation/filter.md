@@ -35,6 +35,7 @@ q2 = q.filter(lambda x: x.priority == 'high' or x.urgent == True)
 ## Use Cases
 
 ### 1. Data Quality Filtering
+
 ```python
 # Remove invalid rows
 clean_data = (q
@@ -45,6 +46,7 @@ clean_data = (q
 ```
 
 ### 2. Business Logic Filtering
+
 ```python
 # Active high-value customers
 targets = q.filter(lambda x: 
@@ -55,6 +57,7 @@ targets = q.filter(lambda x:
 ```
 
 ### 3. Date Range Filtering
+
 ```python
 from datetime import datetime, timedelta
 
@@ -65,6 +68,7 @@ recent = q.filter(lambda x:
 ```
 
 ### 4. String Pattern Matching
+
 ```python
 # Gmail users
 gmail_users = q.filter(lambda x: x.email.endswith('@gmail.com'))
@@ -74,6 +78,7 @@ smiths = q.filter(lambda x: 'smith' in x.last_name.lower())
 ```
 
 ### 5. Complex Conditions
+
 ```python
 # Sophisticated filtering logic
 qualified = q.filter(lambda x:
@@ -87,6 +92,7 @@ qualified = q.filter(lambda x:
 ## Gotchas
 
 ### Exception Handling
+
 If your lambda raises an exception, that row is **silently excluded** (treated as False):
 
 ```python
@@ -98,6 +104,7 @@ q.filter(lambda x: x.age is not None and x.age > 18)
 ```
 
 ### Null/None Values
+
 Be careful with null values in comparisons:
 
 ```python
@@ -112,6 +119,7 @@ q.filter(lambda x: (x.value or 0) > 0)
 ```
 
 ### String Methods on None
+
 ```python
 # Dangerous - AttributeError if email is None
 q.filter(lambda x: x.email.endswith('@company.com'))
@@ -121,6 +129,7 @@ q.filter(lambda x: x.email and x.email.endswith('@company.com'))
 ```
 
 ### Boolean Traps
+
 ```python
 # Dangerous - only keeps rows where paid is explicitly True
 # Rows where paid is None or missing are excluded
@@ -131,6 +140,7 @@ q.filter(lambda x: x.paid == True)
 ```
 
 ### Filter Order Matters
+
 Filters are applied in sequence, so order can affect performance:
 
 ```python

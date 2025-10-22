@@ -5,9 +5,13 @@ Selecting, ordering, and sampling rows.
 ## Methods
 
 ### [head()](head.md) - First n rows
+
 ### [tail()](tail.md) - Last n rows
+
 ### [sample()](sample.md) - Random sample
+
 ### [sort()](sort.md) - Sort by columns
+
 ### [distinct()](distinct.md) - Remove duplicates
 
 ## Quick Reference

@@ -372,6 +372,7 @@ q3 = q2.replay()  # Quick verification
 ```
 
 **Properties**:
+
 - ✓ Replayable
 - ✗ Not reloadable (no source)
 - ✓ Deterministic (if you avoid `sample()` without seed)
@@ -397,6 +398,7 @@ q4.deterministic  # True ✓
 ```
 
 **Benefits**:
+
 - Can reload when source data updates
 - Results are reproducible
 - Can debug by replaying history
@@ -424,6 +426,7 @@ q5.deterministic  # True - empty history
 ```
 
 **Trade-off**:
+
 - Lose reloadability
 - Gain memory efficiency
 - Keep determinism (empty history)
@@ -503,6 +506,7 @@ This table shows how each method affects the `deterministic` and `reloadable` fl
 | `sum()`, `mean()`, etc. | N/A (scalar) | N/A (scalar) | Returns scalar, not Q |
 
 **Legend:**
+
 - ✅ **Inherited from parent** - Takes the flag value from the source Q
 - ✅ **Inherited from LEFT (self)** - For filtering, only considers the left Q
 - ⚠️ **Sets to False** - Operation explicitly sets the flag to False
@@ -550,6 +554,7 @@ This table shows whether each method's **operation itself** is deterministic.
 | `sum()`, `mean()`, etc. | ✅ Yes | Deterministic aggregation functions |
 
 **Key Points:**
+
 - ✅ **Yes** = Operation always produces same output for same input
 - ❌ **No** = Operation may produce different output for same input
 - ⚠️ **Partial** = Depends on lambda/function determinism
@@ -740,6 +745,7 @@ def safe_reload(q, allow_partial=True):
 - **Determinism**: Same input → same output, can break via random operations or references
 
 All three are independent but complementary:
+
 - You can be deterministic without being reloadable (no source file)
 - You can be reloadable without being deterministic (random operations)
 - You can always replay regardless of the other two

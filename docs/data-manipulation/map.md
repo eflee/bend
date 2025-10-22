@@ -38,6 +38,7 @@ q2 = q.map(lambda x: x.price * x.qty)
 ## Use Cases
 
 ### 1. Data Restructuring
+
 ```python
 # Reshape complex data into simpler form
 simplified = q.map(lambda x: {
@@ -48,6 +49,7 @@ simplified = q.map(lambda x: {
 ```
 
 ### 2. Column Subset with Transformation
+
 ```python
 # Extract and transform specific fields
 export = q.map(lambda x: {
@@ -59,6 +61,7 @@ export = q.map(lambda x: {
 ```
 
 ### 3. JSON/API Response Mapping
+
 ```python
 # Transform database records into API response format
 api_response = orders.map(lambda x: {
@@ -74,6 +77,7 @@ api_response = orders.map(lambda x: {
 ```
 
 ### 4. Date/Time Decomposition
+
 ```python
 # Break timestamps into components
 time_series = q.map(lambda x: {
@@ -86,6 +90,7 @@ time_series = q.map(lambda x: {
 ```
 
 ### 5. Aggregating Multiple Columns
+
 ```python
 # Combine multiple fields into summary
 summary = q.map(lambda x: {
@@ -194,6 +199,7 @@ q.map(lambda x: {
 ## Complex Transformations
 
 ### Nested Data
+
 ```python
 # Flatten nested structure
 q.map(lambda x: {
@@ -205,6 +211,7 @@ q.map(lambda x: {
 ```
 
 ### Conditional Structure
+
 ```python
 # Different fields based on type
 q.map(lambda x: {

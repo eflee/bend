@@ -31,6 +31,7 @@ q3 = q2.rebase()
 ## Use Cases
 
 ### 1. Memory Management
+
 ```python
 large_q = Q(huge_df)
 result = q.merge(large_q, on='id')  # Stores deep copy of large_q
@@ -40,6 +41,7 @@ result = result.rebase()  # Much less memory
 ```
 
 ### 2. Performance
+
 ```python
 # Long pipeline
 result = q
@@ -52,6 +54,7 @@ result = result.rebase()  # Fast access, no replay needed
 ```
 
 ### 3. Before Serialization
+
 ```python
 # Complex history with lambdas
 result = q.filter(...).assign(...).merge(...)
@@ -63,11 +66,13 @@ flat = result.rebase()  # No lambdas in history
 ## Trade-offs
 
 **Benefits:**
+
 - ✅ Reduced memory (drops deep copies)
 - ✅ Faster operations (no change replay)
 - ✅ Simpler state
 
 **Costs:**
+
 - ❌ Cannot `reload()` (no source path preserved)
 - ❌ Cannot inspect change history
 - ❌ Cannot `replay()` back to base

@@ -38,18 +38,21 @@ q3 = q2.filter(lambda x: x.ssn.startswith('123'))  # Works!
 ## Use Cases
 
 ### 1. Hide Clutter While Exploring
+
 ```python
 # Hide IDs and timestamps to see data better
 q.hide('id', 'customer_id', 'product_id', 'created_at', 'updated_at')
 ```
 
 ### 2. Presentations/Demos
+
 ```python
 # Hide internal fields
 demo = q.hide('internal_status', 'debug_flag', 'processing_time_ms')
 ```
 
 ### 3. Keep But Don't Show
+
 ```python
 # Hide intermediate calculation columns
 result = (q
@@ -83,18 +86,21 @@ q3.to_df()  # ❌ No 'cost' column
 ## Gotchas
 
 ### Hidden Columns in Export
+
 ```python
 q2 = q.hide('password')
 q2.dump('export.csv')  # ⚠️ 'password' IS in the file!
 ```
 
 Use `drop()` instead for true removal:
+
 ```python
 q2 = q.drop('password')
 q2.dump('export.csv')  # ✅ 'password' is NOT in the file
 ```
 
 ### Non-Existent Columns
+
 ```python
 q.hide('nonexistent')  # OK, no error
 ```

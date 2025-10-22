@@ -74,6 +74,7 @@ q.groupby(
 ## Use Cases
 
 ### 1. Sales by Region
+
 ```python
 regional_sales = orders.groupby(
     lambda x: x.region,
@@ -84,6 +85,7 @@ regional_sales = orders.groupby(
 ```
 
 ### 2. Customer Segmentation
+
 ```python
 customer_stats = orders.groupby(
     lambda x: x.customer_id,
@@ -95,6 +97,7 @@ customer_stats = orders.groupby(
 ```
 
 ### 3. Time Series Aggregation
+
 ```python
 daily = transactions.groupby(
     lambda x: x.timestamp.date(),

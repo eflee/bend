@@ -5,6 +5,7 @@ Managing Q state, history, and memory.
 ## Methods
 
 ### [reload()](reload.md)
+
 Reload from source files (deep/recursive).
 
 **When to use**: Source data updated, need fresh data
@@ -14,6 +15,7 @@ q.reload()  # Reloads CSV and replays all changes
 ```
 
 ### [replay()](replay.md)
+
 Re-apply changes to in-memory base.
 
 **When to use**: Verify idempotency, reset after manual changes
@@ -23,6 +25,7 @@ q.replay()  # Recomputes from base + changes
 ```
 
 ### [rebase()](rebase.md)
+
 Flatten history, drop deep copies.
 
 **When to use**: Memory management, before serialization
@@ -32,6 +35,7 @@ q.rebase()  # Current state becomes new base
 ```
 
 ### [memory_usage()](memory_usage.md)
+
 Get memory breakdown.
 
 **When to use**: Monitoring, debugging memory issues

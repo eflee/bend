@@ -40,6 +40,7 @@ result = q1.concat(q2).distinct()
 ## Use Cases
 
 ### 1. Combining Similar Datasets
+
 ```python
 west_customers = Q(load_csv('customers_west.csv'))
 east_customers = Q(load_csv('customers_east.csv'))
@@ -49,6 +50,7 @@ all_customers = west_customers.union(east_customers)
 ```
 
 ### 2. Deduplicating Across Sources
+
 ```python
 source1 = Q(df1).filter(lambda x: x.status == 'active')
 source2 = Q(df2).filter(lambda x: x.status == 'active')
@@ -94,6 +96,7 @@ result = q1.union(q2)
 ## Gotchas
 
 ### Columns Must Match
+
 ```python
 q1 = Q(pd.DataFrame({'a': [1, 2]}))
 q2 = Q(pd.DataFrame({'b': [3, 4]}))  # Different columns

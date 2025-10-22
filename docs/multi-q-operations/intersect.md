@@ -53,6 +53,7 @@ result = q1.intersect(q2)
 ## Use Cases
 
 ### 1. Finding Common Records
+
 ```python
 active_last_month = Q(load_csv('active_march.csv'))
 active_this_month = Q(load_csv('active_april.csv'))
@@ -62,6 +63,7 @@ retained = active_last_month.intersect(active_this_month)
 ```
 
 ### 2. Data Validation
+
 ```python
 expected = Q(expected_df)
 actual = Q(actual_df)
@@ -75,6 +77,7 @@ extra_in_actual = actual.difference(expected)
 ```
 
 ### 3. Set Membership
+
 ```python
 whitelist = Q(approved_df)
 submissions = Q(submission_df)
@@ -110,6 +113,7 @@ result = q1.intersect(q2)
 ## Gotchas
 
 ### Columns Must Match
+
 ```python
 q1 = Q(pd.DataFrame({'a': [1, 2]}))
 q2 = Q(pd.DataFrame({'a': [1, 2], 'b': [10, 20]}))
@@ -119,6 +123,7 @@ q2 = Q(pd.DataFrame({'a': [1, 2], 'b': [10, 20]}))
 ```
 
 ### Null Handling
+
 ```python
 q1 = Q(pd.DataFrame({'a': [1, None, 3]}))
 q2 = Q(pd.DataFrame({'a': [None, 2, 3]}))

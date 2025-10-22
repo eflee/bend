@@ -5,23 +5,28 @@ Methods for cleaning and handling missing or incorrect data.
 ## Available Methods
 
 ### [`dropna()`](dropna.md)
+
 Remove rows with null/missing values.
 
 ### [`fillna()`](fillna.md)
+
 Fill missing values with specified values.
 
 ### [`replace()`](replace.md)
+
 Replace specific values in the dataset.
 
 ## Common Use Cases
 
 ### Removing Incomplete Records
+
 ```python
 # Remove rows missing critical fields
 clean = q.dropna('email', 'customer_id')
 ```
 
 ### Filling Missing Values
+
 ```python
 # Fill nulls with sensible defaults
 filled = q.fillna({
@@ -32,6 +37,7 @@ filled = q.fillna({
 ```
 
 ### Standardizing Values
+
 ```python
 # Replace legacy values with standardized ones
 standardized = q.replace({
@@ -41,6 +47,7 @@ standardized = q.replace({
 ```
 
 ### Complete Cleaning Pipeline
+
 ```python
 result = (q
     .dropna('email')                    # Remove rows without email

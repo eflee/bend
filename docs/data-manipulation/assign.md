@@ -39,6 +39,7 @@ q2 = q.assign(
 ## Use Cases
 
 ### 1. Business Calculations
+
 ```python
 # E-commerce order totals
 orders = q.assign(
@@ -50,6 +51,7 @@ orders = q.assign(
 ```
 
 ### 2. Data Enrichment
+
 ```python
 # Add derived fields for analysis
 customers = q.assign(
@@ -60,6 +62,7 @@ customers = q.assign(
 ```
 
 ### 3. Feature Engineering
+
 ```python
 # ML feature creation
 dataset = q.assign(
@@ -70,6 +73,7 @@ dataset = q.assign(
 ```
 
 ### 4. String Manipulation
+
 ```python
 # Text processing
 users = q.assign(
@@ -82,6 +86,7 @@ users = q.assign(
 ## Gotchas
 
 ### Column Order Dependency
+
 Columns are evaluated **left to right**, so you can reference earlier columns in the same `assign()` call:
 
 ```python
@@ -99,6 +104,7 @@ q.assign(
 ```
 
 ### Overwriting Existing Columns
+
 If you assign to a column name that already exists, the original is preserved and you can reference it:
 
 ```python
@@ -110,6 +116,7 @@ q.assign(status=lambda x: 'ACTIVE' if x.status == 'pending' else x.status)
 ```
 
 ### Error Handling
+
 If your lambda raises an exception on any row, the entire operation fails:
 
 ```python
@@ -121,6 +128,7 @@ q.assign(ratio=lambda x: x.numerator / x.denominator if x.denominator != 0 else 
 ```
 
 ### Null/Missing Values
+
 Be careful with null values - they can cause exceptions:
 
 ```python

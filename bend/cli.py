@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Command-line interface for Bend."""
 
-import sys
 import argparse
 import math
+
 import pandas as pd
 
-from . import load_csv, dump_csv, Q
+from . import Q, dump_csv, load_csv
 
 
 def main():
@@ -16,23 +16,23 @@ def main():
     )
     parser.add_argument(
         "csv_file",
-        nargs='?',  # Make it optional
-        help="Path to CSV file or Google Sheets URL (optional)"
+        nargs="?",  # Make it optional
+        help="Path to CSV file or Google Sheets URL (optional)",
     )
     parser.add_argument(
         "--skip-rows",
         type=int,
         default=0,
         metavar="N",
-        help="Skip the first N rows before loading CSV (default: 0)"
+        help="Skip the first N rows before loading CSV (default: 0)",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Load CSV if provided
     if args.csv_file:
         q = load_csv(args.csv_file, skip_rows=args.skip_rows)
-        
+
         banner = (
             f"Bend REPL - Loaded {q.rows} rows × {len(q.columns)} columns as 'q'\n"
             "\n"
@@ -54,7 +54,7 @@ def main():
     else:
         # No file loaded, just provide helpers
         q = None
-        
+
         banner = (
             "Bend REPL - No data loaded\n"
             "\n"
@@ -74,11 +74,11 @@ def main():
             "  q2 = load_csv('other.csv')                  # load another file\n"
             "  q.merge(q2, on='id', how='left')            # join datasets\n"
         )
-    
+
     # Helper functions for the REPL
     def r():
         """Reload data from source file and re-apply all tracked changes.
-        
+
         Shortcut for: q = q.reload()
         """
         nonlocal q
@@ -89,33 +89,19 @@ def main():
         return q
 
     try:
-        from IPython import start_ipython
         import builtins
-        ns = dict(
-            q=q,
-            load_csv=load_csv,
-            dump_csv=dump_csv,
-            r=r,
-            Q=Q,
-            math=math,
-            pd=pd
-        )
+
+        from IPython import start_ipython
+
+        ns = dict(q=q, load_csv=load_csv, dump_csv=dump_csv, r=r, Q=Q, math=math, pd=pd)
         builtins.__dict__.update(ns)
         start_ipython(argv=[], user_ns=ns, display_banner=True)
     except Exception:
         import code
-        ns = dict(
-            q=q,
-            load_csv=load_csv,
-            dump_csv=dump_csv,
-            r=r,
-            Q=Q,
-            math=math,
-            pd=pd
-        )
+
+        ns = dict(q=q, load_csv=load_csv, dump_csv=dump_csv, r=r, Q=Q, math=math, pd=pd)
         code.interact(banner=banner, local=ns)
 
 
 if __name__ == "__main__":
     main()
-

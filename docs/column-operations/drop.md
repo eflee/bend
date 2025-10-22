@@ -29,12 +29,14 @@ q2 = q.drop('id', 'internal_field', 'temp')
 ## Use Cases
 
 ### 1. Remove Unnecessary Columns
+
 ```python
 # Clean dataset for export
 export = q.drop('internal_id', 'created_at_timestamp', 'debug_flag')
 ```
 
 ### 2. Before Merge
+
 ```python
 # Remove conflicting columns before merge
 q1_clean = q1.drop('status', 'priority')
@@ -42,6 +44,7 @@ result = q1_clean.merge(q2, on='id')
 ```
 
 ### 3. Privacy/Security
+
 ```python
 # Remove sensitive data
 public = q.drop('ssn', 'password_hash', 'credit_card')
@@ -70,18 +73,21 @@ q3 = q2.assign(profit=lambda x: x.revenue - x.cost)  # Works!
 ## Gotchas
 
 ### Dropping Non-Existent Columns
+
 ```python
 # Silently succeeds - no error if column doesn't exist
 q2 = q.drop('nonexistent_column')  # OK, no-op
 ```
 
 ### Cannot Access After Drop
+
 ```python
 q2 = q.drop('price')
 q3 = q2.filter(lambda x: x.price > 100)  # AttributeError!
 ```
 
 ### Order Doesn't Matter
+
 ```python
 q.drop('a', 'b', 'c')  # Same as
 q.drop('c', 'a', 'b')

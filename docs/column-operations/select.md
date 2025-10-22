@@ -29,12 +29,14 @@ q2 = q.select('revenue')
 ## Use Cases
 
 ### 1. Simplify Data
+
 ```python
 # Keep only what you need
 simple = q.select('customer_id', 'order_date', 'total')
 ```
 
 ### 2. Export Subset
+
 ```python
 # Create export with specific fields
 export = (q
@@ -44,6 +46,7 @@ export = (q
 ```
 
 ### 3. Privacy
+
 ```python
 # Remove sensitive data
 safe = q.select('id', 'name', 'email')  # Drops SSN, etc.
@@ -63,12 +66,14 @@ Use `drop()` when you know what to remove.
 ## Gotchas
 
 ### Non-Existent Columns Ignored
+
 ```python
 # Only keeps columns that exist
 q2 = q.select('a', 'b', 'nonexistent')  # Gets a, b only
 ```
 
 ### Order Doesn't Matter
+
 ```python
 q.select('age', 'name', 'email')  # Column order unchanged
 # Result has columns in original order, not selection order

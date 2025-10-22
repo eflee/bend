@@ -59,6 +59,7 @@ result = (q
 ## Use Cases
 
 ### Default Values for Optional Fields
+
 ```python
 # Set sensible defaults for optional data
 users = (raw_users
@@ -72,6 +73,7 @@ users = (raw_users
 ```
 
 ### Zero-Filling Numeric Data
+
 ```python
 # Fill all numeric nulls with 0 for calculations
 sales = (orders
@@ -85,6 +87,7 @@ sales = (orders
 ```
 
 ### Categorical Defaults
+
 ```python
 # Fill categorical columns with 'Unknown' or 'Other'
 categorized = (data
@@ -97,6 +100,7 @@ categorized = (data
 ```
 
 ### Forward Fill Pattern
+
 ```python
 # While fillna() doesn't support forward fill directly,
 # you can use pandas for complex fills then wrap in Q:
@@ -110,6 +114,7 @@ q_filled = Q(df, source_path=q._source_path)
 ## Gotchas
 
 ### Type Coercion
+
 ```python
 # Filling string column with number may coerce types
 df = DataFrame({'name': ['Alice', None, 'Charlie']})
@@ -117,6 +122,7 @@ q.fillna(0)  # Results in ['Alice', '0', 'Charlie'] or type error
 ```
 
 ### Partial Fills
+
 ```python
 # Only specified columns in dict are filled
 q.fillna({'age': 0})  # Other columns remain unchanged
@@ -127,6 +133,7 @@ q.fillna(0).fillna({'name': 'Unknown'})
 ```
 
 ### Empty String vs Null
+
 ```python
 # fillna() doesn't affect empty strings
 df = DataFrame({'a': [None, '', 'value']})
@@ -134,6 +141,7 @@ q.fillna('EMPTY')  # Results in ['EMPTY', '', 'value']
 ```
 
 ### No Change If No Nulls
+
 ```python
 # If column has no nulls, fillna has no effect
 df = DataFrame({'a': [1, 2, 3]})
@@ -149,6 +157,7 @@ q.fillna({'a': 0})  # Result is identical to input
 ## Common Patterns
 
 ### Fill Then Validate
+
 ```python
 result = (q
     .fillna({'age': 0, 'income': 0})
@@ -158,6 +167,7 @@ result = (q
 ```
 
 ### Different Fills for Different Column Types
+
 ```python
 # Identify column types and fill accordingly
 numeric_fills = {col: 0 for col in ['age', 'salary', 'score']}
@@ -168,6 +178,7 @@ q.fillna(all_fills)
 ```
 
 ### Fill Before Aggregation
+
 ```python
 # Ensure aggregations don't skip nulls unexpectedly
 result = (orders
@@ -193,6 +204,7 @@ result = (orders
 ✅ **Yes** - Stored as `("fillna", value)` in change history.
 
 This means:
+
 - `replay()` will re-apply the fill
 - `reload()` will reload data then re-apply the fill
 - `rebase()` will bake the fill into the base DataFrame

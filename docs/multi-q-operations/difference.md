@@ -53,6 +53,7 @@ result = q1.difference(q2)
 ## Use Cases
 
 ### 1. Finding Dropped Records
+
 ```python
 last_week = Q(load_csv('active_users_2024_01_15.csv'))
 this_week = Q(load_csv('active_users_2024_01_22.csv'))
@@ -62,6 +63,7 @@ churned = last_week.difference(this_week)
 ```
 
 ### 2. Data Validation
+
 ```python
 expected = Q(expected_df)
 actual = Q(actual_df)
@@ -74,6 +76,7 @@ extra = actual.difference(expected)
 ```
 
 ### 3. Exclusion Lists
+
 ```python
 all_users = Q(all_df)
 blocked = Q(blocked_df)
@@ -83,6 +86,7 @@ allowed = all_users.difference(blocked)
 ```
 
 ### 4. Change Detection
+
 ```python
 before = Q(snapshot_before_df)
 after = Q(snapshot_after_df)
@@ -130,6 +134,7 @@ result = q1.difference(q2)
 ## Gotchas
 
 ### Columns Must Match
+
 ```python
 q1 = Q(pd.DataFrame({'a': [1, 2]}))
 q2 = Q(pd.DataFrame({'a': [1, 2], 'b': [10, 20]}))
@@ -138,6 +143,7 @@ q2 = Q(pd.DataFrame({'a': [1, 2], 'b': [10, 20]}))
 ```
 
 ### Null Handling
+
 ```python
 q1 = Q(pd.DataFrame({'a': [1, None, 3]}))
 q2 = Q(pd.DataFrame({'a': [None, 2]}))
@@ -148,6 +154,7 @@ result = q1.difference(q2)
 ```
 
 ### Duplicates in Self
+
 ```python
 q1 = Q(pd.DataFrame({'a': [1, 1, 2, 2, 3]}))
 q2 = Q(pd.DataFrame({'a': [2]}))

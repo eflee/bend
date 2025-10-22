@@ -63,6 +63,7 @@ result = q1.merge(q2, on='id', resolve={'status': lambda l, r: l})
 ## Use Cases
 
 ### 1. Standard Left Join
+
 ```python
 # All customers with their orders (if any)
 customers = Q(load_csv('customers.csv'))
@@ -72,12 +73,14 @@ with_orders = customers.join(orders, on='customer_id', how='left')
 ```
 
 ### 2. Inner Join (Matching Only)
+
 ```python
 # Only customers who have placed orders
 active_customers = customers.join(orders, on='customer_id', how='inner')
 ```
 
 ### 3. Multiple Key Joins
+
 ```python
 # Join on composite key
 result = q1.join(q2, on=['country', 'state', 'city'])

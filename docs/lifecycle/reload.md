@@ -15,6 +15,7 @@ A new Q object with reloaded base data and re-applied changes.
 ## What It Does
 
 **Deep/recursive reload**:
+
 1. Reloads this Q's source CSV from disk
 2. Recursively reloads any Q objects in change history (from `concat`, `merge`, etc.)
 3. Re-applies all changes to the newly reloaded data
@@ -33,6 +34,7 @@ q3 = q2.reload()  # Reads new CSV, re-applies filter
 ## Use Cases
 
 ### 1. External Data Updates
+
 ```python
 # Initial load
 sales = Q(load_csv('daily_sales.csv'), source_path='daily_sales.csv')
@@ -44,6 +46,7 @@ updated_pipeline = pipeline.reload()
 ```
 
 ### 2. Iterative Development
+
 ```python
 # Build pipeline
 q = Q(load_csv('data.csv'), source_path='data.csv')
@@ -55,6 +58,7 @@ result = result.reload()
 ```
 
 ### 3. Multi-Q Pipelines
+
 ```python
 q1 = Q(load_csv('customers.csv'), source_path='customers.csv')
 q2 = Q(load_csv('orders.csv'), source_path='orders.csv')
@@ -101,12 +105,14 @@ New columns and rows are allowed - only column removal causes errors.
 ## Errors
 
 ### No Source Path
+
 ```python
 q = Q(df)  # No source_path
 q.reload()  # ValueError: Cannot reload: no source path available
 ```
 
 ### After groupby()
+
 ```python
 q = Q(df, source_path='data.csv')
 q2 = q.groupby(...)  # Terminal operation, resets history

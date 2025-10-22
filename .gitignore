@@ -150,3 +150,7 @@ Thumbs.db
 *.csv
 !example*.csv
 
+# Node.js / npm
+node_modules/
+package-lock.json
+

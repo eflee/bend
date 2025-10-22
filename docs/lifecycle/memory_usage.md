@@ -15,6 +15,7 @@ q.memory_usage(deep: bool = True) -> dict
 ## Returns
 
 Dictionary with memory breakdown:
+
 ```python
 {
     'current_df': 12345,        # bytes
@@ -37,6 +38,7 @@ print(f"Changes tracked: {usage['changes']}")
 ## Use Cases
 
 ### 1. Monitor Memory Growth
+
 ```python
 q1 = Q(df)
 print(q1.memory_usage()['total_mb'])  # 10 MB
@@ -50,6 +52,7 @@ print(q3.memory_usage()['total_mb'])  # 10 MB
 ```
 
 ### 2. Debug Memory Issues
+
 ```python
 usage = q.memory_usage()
 if usage['changes_memory'] > usage['current_df']:
