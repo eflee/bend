@@ -50,28 +50,6 @@ def _load_csv_to_dataframe(path_or_url: str, skip_rows: int = 0, dtype: dict = N
     return pd.read_csv(u, **kwargs)
 
 
-def rows(df: pd.DataFrame):
-    """Convert a DataFrame into an iterable of Row namedtuples with dot-accessible columns.
-    
-    Column names are sanitized to be valid Python identifiers by replacing
-    non-alphanumeric characters with underscores.
-    
-    Args:
-        df: A pandas DataFrame
-        
-    Yields:
-        Row namedtuples where each column is accessible as an attribute
-        
-    Example:
-        >>> for row in rows(df):
-        ...     print(row.column_name)
-    """
-    safe_cols = [re.sub(r'[^0-9a-zA-Z_]', '_', c) for c in df.columns]
-    df2 = df.copy()
-    df2.columns = safe_cols
-    return df2.itertuples(index=False, name="Row")
-
-
 class Q:
     """A query interface with tracked change history and replay capabilities.
     
@@ -140,14 +118,14 @@ class Q:
                 # Add new columns
                 add = {}
                 for col_name, fn in change_data.items():
-                    add[col_name] = [fn(r) for r in rows(result)]
+                    add[col_name] = [fn(r) for r in result.itertuples(index=False, name='Row')]
                 result = pd.concat([result.reset_index(drop=True), pd.DataFrame(add)], axis=1)
             
             elif change_type == "map":
                 # Transform rows to new structure
                 fn = change_data
                 recs = []
-                for r in rows(result):
+                for r in result.itertuples(index=False, name='Row'):
                     out = fn(r)
                     if isinstance(out, dict):
                         recs.append(out)
@@ -161,9 +139,9 @@ class Q:
                 # Filter rows
                 fn = change_data
                 mask = []
-                for r in rows(result):
+                for row in result.itertuples(index=False, name='Row'):
                     try:
-                        mask.append(bool(fn(r)))
+                        mask.append(bool(fn(row)))
                     except Exception:
                         mask.append(False)
                 result = result[mask]
@@ -396,7 +374,7 @@ class Q:
     
     def __iter__(self):
         """Make Q iterable - iterates over rows as namedtuples."""
-        return iter(rows(self._df))
+        return self._df.itertuples(index=False, name='Row')
     
     def __len__(self) -> int:
         """Return the number of rows."""
@@ -632,7 +610,7 @@ class Q:
             ...           count=lambda g: len(g))
         """
         buckets = defaultdict(list)
-        for r in rows(self._df):
+        for r in self._df.itertuples(index=False, name='Row'):
             buckets[keyfn(r)].append(r)
         out = []
         for k, grp in buckets.items():

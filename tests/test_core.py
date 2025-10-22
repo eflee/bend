@@ -4,7 +4,7 @@ import pytest
 import pandas as pd
 import tempfile
 import os
-from bend.core import Q, _load_csv_to_dataframe, rows, _gsheets_csv
+from bend.core import Q, _load_csv_to_dataframe, _gsheets_csv
 
 
 class TestHelperFunctions:
@@ -47,16 +47,6 @@ class TestHelperFunctions:
         df = _load_csv_to_dataframe(str(csv_file), dtype={'age': int, 'price': float})
         assert df['age'].dtype == 'int64'
         assert df['price'].dtype == 'float64'
-
-    def test_rows_function(self):
-        """Should convert DataFrame to iterable of Row namedtuples."""
-        df = pd.DataFrame({"name": ["Alice", "Bob"], "age": [25, 30]})
-        row_list = list(rows(df))
-        
-        assert len(row_list) == 2
-        assert row_list[0].name == "Alice"
-        assert row_list[0].age == 25
-
 
 class TestQBasics:
     """Tests for Q basic functionality."""

@@ -5,7 +5,7 @@ import pandas as pd
 import tempfile
 import os
 from bend import Q
-from bend.core import _load_csv_to_dataframe, rows
+from bend.core import _load_csv_to_dataframe
 
 
 class TestReadmeExamples:

@@ -6,7 +6,7 @@ import argparse
 import math
 import pandas as pd
 
-from . import load_csv, dump_csv, Q, rows
+from . import load_csv, dump_csv, Q
 
 
 def main():
@@ -39,12 +39,12 @@ def main():
             "Available functions:\n"
             "  load_csv(path)     : Load a CSV file into a Q\n"
             "  dump_csv(q, path)  : Save a Q to a CSV file\n"
-            "  rows(q)            : Iterate over Q rows as namedtuples\n"
             "\n"
             "Examples:\n"
             "  q.columns, q.rows                           # discover shape\n"
             "  q.filter(lambda x: x.price > 100)           # filter rows\n"
             "  q.assign(total=lambda x: x.price * x.qty)   # add computed columns\n"
+            "  for row in q: print(row.name, row.age)      # iterate rows\n"
             "  q2 = load_csv('other.csv')                  # load another file\n"
             "  q.filter(q2, on='id')                       # semi-join\n"
             "  dump_csv(q.filter(...), 'output.csv')       # export result\n"
@@ -95,7 +95,6 @@ def main():
             q=q,
             load_csv=load_csv,
             dump_csv=dump_csv,
-            rows=rows,
             r=r,
             Q=Q,
             math=math,
@@ -109,7 +108,6 @@ def main():
             q=q,
             load_csv=load_csv,
             dump_csv=dump_csv,
-            rows=rows,
             r=r,
             Q=Q,
             math=math,
