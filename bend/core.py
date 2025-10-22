@@ -258,6 +258,20 @@ class Q:
                             merged = merged.drop(columns=[left_col, right_col])
                 
                 result = merged
+            
+            elif change_type == "fillna":
+                # Fill null values
+                value = change_data
+                result = result.fillna(value)
+            
+            elif change_type == "replace":
+                # Replace values
+                if 'value' in change_data:
+                    # Scalar replacement: replace(old, new)
+                    result = result.replace(change_data['to_replace'], change_data['value'])
+                else:
+                    # Dict replacement: replace({...})
+                    result = result.replace(change_data['to_replace'])
         
         return result
     
@@ -590,6 +604,104 @@ class Q:
                 f"Expected Callable or Q, got {type(fn_or_q).__name__}.\n"
                 f"Example: q.filter(lambda x: x.age > 18) or q.filter(other_q, on='id')"
             )
+    
+    def dropna(self, *cols, how='any') -> 'Q':
+        """Remove rows with null values (wrapper around filter).
+        
+        Args:
+            *cols: Optional column names to check. If not specified, checks all columns.
+            how: Either 'any' (default) or 'all':
+                - 'any': Drop row if ANY specified column has null
+                - 'all': Drop row if ALL specified columns are null
+        
+        Returns:
+            A new Q object with rows containing nulls removed
+            
+        Examples:
+            >>> q.dropna()  # Remove rows with any null
+            >>> q.dropna('email')  # Remove rows where email is null
+            >>> q.dropna('email', 'phone')  # Remove rows where either is null
+            >>> q.dropna('email', 'phone', how='all')  # Remove only if both null
+            
+        Deterministic: Yes (wrapper around filter)
+        """
+        if how not in ('any', 'all'):
+            raise ValueError(f"how must be 'any' or 'all', got '{how}'")
+        
+        # If no columns specified, check all columns
+        check_cols = cols if cols else tuple(self.columns)
+        
+        # Build the filter lambda
+        if how == 'any':
+            # Drop if ANY column is null (keep if ALL are not null)
+            def filter_fn(row):
+                return all(pd.notna(getattr(row, col)) for col in check_cols)
+        else:  # how == 'all'
+            # Drop if ALL columns are null (keep if ANY is not null)
+            def filter_fn(row):
+                return any(pd.notna(getattr(row, col)) for col in check_cols)
+        
+        # Use existing filter method
+        return self.filter(filter_fn)
+    
+    def fillna(self, value) -> 'Q':
+        """Fill null values with a specified value or mapping.
+        
+        Args:
+            value: Either:
+                - A scalar value to fill all nulls
+                - A dict mapping column names to fill values
+        
+        Returns:
+            A new Q object with nulls filled
+            
+        Examples:
+            >>> q.fillna(0)  # Fill all nulls with 0
+            >>> q.fillna({'age': 0, 'city': 'Unknown'})  # Column-specific fills
+            
+        Deterministic: Yes
+        """
+        new_changes = self._changes + [("fillna", value)]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
+    
+    def replace(self, to_replace, value=None) -> 'Q':
+        """Replace values in the dataset.
+        
+        Args:
+            to_replace: Either:
+                - A scalar value to replace across all columns
+                - A dict for column-specific replacements: {'col': {'old': 'new'}}
+                - A dict for value mapping across all columns: {'old': 'new'}
+            value: Replacement value (only if to_replace is scalar)
+        
+        Returns:
+            A new Q object with values replaced
+            
+        Examples:
+            >>> # Replace value across all columns
+            >>> q.replace(0, np.nan)
+            
+            >>> # Column-specific replacements
+            >>> q.replace({'region': {'CA': 'California', 'NY': 'New York'}})
+            
+            >>> # Replace across all columns
+            >>> q.replace({'old_val': 'new_val'})
+            
+        Deterministic: Yes
+        """
+        if value is not None:
+            # Scalar replacement: replace(old, new)
+            replace_data = {'to_replace': to_replace, 'value': value}
+        else:
+            # Dict replacement: replace({...})
+            replace_data = {'to_replace': to_replace}
+        
+        new_changes = self._changes + [("replace", replace_data)]
+        new_df = self._apply_changes(self._base_df, new_changes)
+        
+        return self._copy_with(df=new_df, changes=new_changes)
     
     def groupby(self, keyfn: Callable, **aggs) -> 'Q':
         """Group rows by a key function and compute aggregations.

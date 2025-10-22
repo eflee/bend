@@ -1,10 +1,16 @@
 """Tests for bend.core module with new architecture."""
 
-import pytest
-import pandas as pd
-import tempfile
 import os
-from bend.core import Q, _load_csv_to_dataframe, _gsheets_csv
+from pathlib import Path
+import tempfile
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from bend import Q
+from bend.core import _gsheets_csv, _load_csv_to_dataframe
+from bend.core import _load_csv_to_dataframe
 
 
 class TestHelperFunctions:
@@ -1897,3 +1903,785 @@ class TestQMemoryUsage:
         assert usage_after["changes"] == 0
         # After rebase, current and base should be same size
         assert usage_after["current_df"] == usage_after["base_df"]
+"""Tests for Phase 3: Data Quality methods (dropna, fillna, replace)."""
+
+
+
+
+class TestDropna:
+    """Tests for Q.dropna() method."""
+
+    def test_dropna_all_columns_default(self):
+        """Should drop rows with any null by default."""
+        df = pd.DataFrame({
+            "a": [1, 2, None, 4],
+            "b": [5, None, 7, 8],
+            "c": [9, 10, 11, 12]
+        })
+        q = Q(df)
+        q2 = q.dropna()
+        
+        assert len(q2) == 2  # Only rows 0 and 3 have no nulls
+        assert list(q2.to_df()["a"]) == [1.0, 4.0]
+
+    def test_dropna_single_column(self):
+        """Should drop rows where specified column is null."""
+        df = pd.DataFrame({
+            "a": [1, 2, None, 4],
+            "b": [5, None, 7, 8],
+            "c": [9, 10, 11, 12]
+        })
+        q = Q(df)
+        q2 = q.dropna("a")
+        
+        assert len(q2) == 3  # Only row 2 dropped
+        assert list(q2.to_df()["c"]) == [9.0, 10.0, 12.0]
+
+    def test_dropna_multiple_columns_any(self):
+        """Should drop rows where ANY specified column is null."""
+        df = pd.DataFrame({
+            "a": [1, 2, None, 4],
+            "b": [5, None, 7, 8],
+            "c": [9, 10, 11, 12]
+        })
+        q = Q(df)
+        q2 = q.dropna("a", "b")
+        
+        assert len(q2) == 2  # Rows 0 and 3 have neither a nor b null
+        assert list(q2.to_df()["c"]) == [9.0, 12.0]
+
+    def test_dropna_multiple_columns_all(self):
+        """Should drop rows where ALL specified columns are null."""
+        df = pd.DataFrame({
+            "a": [1, None, None, 4],
+            "b": [5, None, None, 8],
+            "c": [9, 10, 11, 12]
+        })
+        q = Q(df)
+        q2 = q.dropna("a", "b", how="all")
+        
+        assert len(q2) == 2  # Rows 1 and 2 have BOTH a and b null
+        assert list(q2.to_df()["c"]) == [9.0, 12.0]
+
+    def test_dropna_no_nulls(self):
+        """Should return unchanged Q if no nulls."""
+        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+        q = Q(df)
+        q2 = q.dropna()
+        
+        assert len(q2) == 3
+        assert list(q2.to_df()["a"]) == [1, 2, 3]
+
+    def test_dropna_all_nulls(self):
+        """Should return empty Q if all rows have nulls."""
+        df = pd.DataFrame({"a": [None, None, None], "b": [None, None, None]})
+        q = Q(df)
+        q2 = q.dropna()
+        
+        assert len(q2) == 0
+
+    def test_dropna_invalid_how(self):
+        """Should raise ValueError for invalid 'how' parameter."""
+        df = pd.DataFrame({"a": [1, None, 3]})
+        q = Q(df)
+        
+        with pytest.raises(ValueError, match="how must be 'any' or 'all'"):
+            q.dropna(how="invalid")
+
+    def test_dropna_is_wrapper_around_filter(self):
+        """dropna should delegate to filter (check immutability)."""
+        df = pd.DataFrame({"a": [1, None, 3], "b": [4, 5, 6]})
+        q = Q(df)
+        q2 = q.dropna("a")
+        
+        # Original should be unchanged
+        assert len(q) == 3
+        # New Q should have nulls removed
+        assert len(q2) == 2
+        # Should have filter in change history
+        assert any(change[0] == "filter" for change in q2._changes)
+
+
+class TestFillna:
+    """Tests for Q.fillna() method."""
+
+    def test_fillna_scalar_all_columns(self):
+        """Should fill all nulls with scalar value."""
+        df = pd.DataFrame({
+            "a": [1, None, 3],
+            "b": [None, 5, 6]
+        })
+        q = Q(df)
+        q2 = q.fillna(0)
+        
+        result = q2.to_df()
+        assert result["a"].tolist() == [1.0, 0.0, 3.0]
+        assert result["b"].tolist() == [0.0, 5.0, 6.0]
+
+    def test_fillna_mapping(self):
+        """Should fill nulls with column-specific values."""
+        df = pd.DataFrame({
+            "a": [1, None, 3],
+            "b": [None, 5, 6],
+            "c": [7, None, 9]
+        })
+        q = Q(df)
+        q2 = q.fillna({"a": 0, "c": 99})
+        
+        result = q2.to_df()
+        assert result["a"].tolist() == [1.0, 0.0, 3.0]
+        assert pd.isna(result["b"].iloc[0])  # b not filled
+        assert result["c"].tolist() == [7.0, 99.0, 9.0]
+
+    def test_fillna_string_columns(self):
+        """Should fill nulls in string columns."""
+        df = pd.DataFrame({
+            "name": ["Alice", None, "Charlie"],
+            "city": [None, "NYC", "LA"]
+        })
+        q = Q(df)
+        q2 = q.fillna({"name": "Unknown", "city": "Unknown"})
+        
+        result = q2.to_df()
+        assert result["name"].tolist() == ["Alice", "Unknown", "Charlie"]
+        assert result["city"].tolist() == ["Unknown", "NYC", "LA"]
+
+    def test_fillna_no_nulls(self):
+        """Should work fine on data with no nulls."""
+        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+        q = Q(df)
+        q2 = q.fillna(0)
+        
+        result = q2.to_df()
+        assert result["a"].tolist() == [1, 2, 3]
+        assert result["b"].tolist() == [4, 5, 6]
+
+    def test_fillna_immutability(self):
+        """Original Q should remain unchanged."""
+        df = pd.DataFrame({"a": [1, None, 3]})
+        q = Q(df)
+        q2 = q.fillna(0)
+        
+        # Original should still have null
+        assert pd.isna(q.to_df()["a"].iloc[1])
+        # New Q should have fill
+        assert q2.to_df()["a"].iloc[1] == 0.0
+
+    def test_fillna_in_change_history(self):
+        """fillna should be tracked in change history."""
+        df = pd.DataFrame({"a": [1, None, 3]})
+        q = Q(df)
+        q2 = q.fillna(0)
+        
+        assert len(q2._changes) == 1
+        assert q2._changes[0][0] == "fillna"
+        assert q2._changes[0][1] == 0
+
+    def test_fillna_chaining(self):
+        """Should chain with other operations."""
+        df = pd.DataFrame({
+            "a": [1, None, 3, None, 5],
+            "b": [10, 20, 30, 40, 50]
+        })
+        q = Q(df)
+        q2 = q.fillna(0).filter(lambda x: x.a > 0).assign(c=lambda x: x.a + x.b)
+        
+        result = q2.to_df()
+        assert len(result) == 3  # Filter keeps a > 0
+        assert result["c"].tolist() == [11.0, 33.0, 55.0]
+
+
+class TestReplace:
+    """Tests for Q.replace() method."""
+
+    def test_replace_scalar_all_columns(self):
+        """Should replace value across all columns."""
+        df = pd.DataFrame({
+            "a": [1, 0, 3],
+            "b": [0, 5, 6]
+        })
+        q = Q(df)
+        q2 = q.replace(0, -1)
+        
+        result = q2.to_df()
+        assert result["a"].tolist() == [1, -1, 3]
+        assert result["b"].tolist() == [-1, 5, 6]
+
+    def test_replace_column_specific_mapping(self):
+        """Should replace values in specific columns."""
+        df = pd.DataFrame({
+            "region": ["CA", "NY", "CA", "TX"],
+            "status": ["active", "inactive", "active", "inactive"]
+        })
+        q = Q(df)
+        q2 = q.replace({
+            "region": {"CA": "California", "NY": "New York"},
+            "status": {"active": "Active", "inactive": "Inactive"}
+        })
+        
+        result = q2.to_df()
+        assert result["region"].tolist() == ["California", "New York", "California", "TX"]
+        assert result["status"].tolist() == ["Active", "Inactive", "Active", "Inactive"]
+
+    def test_replace_value_mapping_all_columns(self):
+        """Should replace values across all columns with mapping."""
+        df = pd.DataFrame({
+            "a": [1, 2, 3],
+            "b": [2, 3, 4]
+        })
+        q = Q(df)
+        q2 = q.replace({2: 99, 3: 88})
+        
+        result = q2.to_df()
+        assert result["a"].tolist() == [1, 99, 88]
+        assert result["b"].tolist() == [99, 88, 4]
+
+    def test_replace_no_matches(self):
+        """Should work fine when no values match."""
+        df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+        q = Q(df)
+        q2 = q.replace(999, -1)
+        
+        result = q2.to_df()
+        assert result["a"].tolist() == [1, 2, 3]
+        assert result["b"].tolist() == [4, 5, 6]
+
+    def test_replace_with_nan(self):
+        """Should replace values with NaN."""
+        df = pd.DataFrame({"a": [1, 0, 3], "b": [0, 5, 6]})
+        q = Q(df)
+        q2 = q.replace(0, np.nan)
+        
+        result = q2.to_df()
+        assert result["a"].iloc[0] == 1
+        assert pd.isna(result["a"].iloc[1])
+        assert pd.isna(result["b"].iloc[0])
+
+    def test_replace_nan_with_value(self):
+        """Should replace NaN with value."""
+        df = pd.DataFrame({"a": [1, np.nan, 3], "b": [np.nan, 5, 6]})
+        q = Q(df)
+        q2 = q.replace(np.nan, 0)
+        
+        result = q2.to_df()
+        assert result["a"].tolist() == [1.0, 0.0, 3.0]
+        assert result["b"].tolist() == [0.0, 5.0, 6.0]
+
+    def test_replace_immutability(self):
+        """Original Q should remain unchanged."""
+        df = pd.DataFrame({"a": [1, 2, 3]})
+        q = Q(df)
+        q2 = q.replace(2, 99)
+        
+        # Original unchanged
+        assert q.to_df()["a"].tolist() == [1, 2, 3]
+        # New Q has replacement
+        assert q2.to_df()["a"].tolist() == [1, 99, 3]
+
+    def test_replace_in_change_history(self):
+        """replace should be tracked in change history."""
+        df = pd.DataFrame({"a": [1, 2, 3]})
+        q = Q(df)
+        q2 = q.replace(2, 99)
+        
+        assert len(q2._changes) == 1
+        assert q2._changes[0][0] == "replace"
+
+    def test_replace_chaining(self):
+        """Should chain with other operations."""
+        df = pd.DataFrame({
+            "status": ["old", "old", "new", "old"],
+            "value": [10, 20, 30, 40]
+        })
+        q = Q(df)
+        q2 = (q.replace({"status": {"old": "legacy"}})
+               .filter(lambda x: x.status == "legacy")
+               .assign(doubled=lambda x: x.value * 2))
+        
+        result = q2.to_df()
+        assert len(result) == 3
+        assert result["doubled"].tolist() == [20, 40, 80]
+
+
+class TestPhase3Integration:
+    """Integration tests for Phase 3 methods."""
+
+    def test_all_three_methods_together(self):
+        """Test using dropna, fillna, and replace in sequence."""
+        df = pd.DataFrame({
+            "name": ["Alice", None, "Charlie", "Dave"],
+            "region": ["CA", "NY", None, "CA"],
+            "score": [85, 90, None, 75]
+        })
+        q = Q(df)
+        
+        # Drop rows with null name, fill other nulls, replace CA
+        q2 = (q.dropna("name")
+               .fillna({"region": "Unknown", "score": 0})
+               .replace({"region": {"CA": "California"}}))
+        
+        result = q2.to_df()
+        assert len(result) == 3
+        assert result["name"].tolist() == ["Alice", "Charlie", "Dave"]
+        assert result["region"].tolist() == ["California", "Unknown", "California"]
+        assert result["score"].tolist() == [85.0, 0.0, 75.0]
+
+    def test_phase3_with_phase1_operations(self):
+        """Test Phase 3 with Phase 1 operations."""
+        df = pd.DataFrame({
+            "id": [1, 2, 3, 4, 5],
+            "status": ["old", "new", None, "old", "new"],
+            "value": [10, None, 30, 40, 50]
+        })
+        q = Q(df)
+        
+        q2 = (q.fillna({"status": "unknown", "value": 0})
+               .replace({"status": {"old": "legacy"}})
+               .filter(lambda x: x.value > 0)
+               .distinct("status")
+               .sort("value"))
+        
+        result = q2.to_df()
+        assert len(result) == 3
+        # After filling nulls, replacing, filtering, distinct, and sorting by value
+        # we get: legacy(10), unknown(30), new(50)
+        assert result["status"].tolist() == ["legacy", "unknown", "new"]
+
+    def test_replay_with_phase3_operations(self):
+        """Test that Phase 3 operations replay correctly."""
+        df = pd.DataFrame({
+            "a": [1, None, 3],
+            "b": ["x", "y", None]
+        })
+        q = Q(df)
+        q2 = q.fillna({"a": 0, "b": "z"}).replace({"b": {"x": "X"}})
+        
+        # Replay should produce same result
+        q3 = q2.replay()
+        
+        assert q2.to_df().equals(q3.to_df())
+
+    def test_deterministic_flag_preserved(self):
+        """Phase 3 operations should preserve deterministic flag."""
+        df = pd.DataFrame({"a": [1, None, 3], "b": [4, 5, None]})
+        q = Q(df)
+        
+        assert q.deterministic is True
+        
+        q2 = q.dropna("a")
+        assert q2.deterministic is True
+        
+        q3 = q2.fillna(0)
+        assert q3.deterministic is True
+        
+        q4 = q3.replace(0, -1)
+        assert q4.deterministic is True
+
+    def test_reloadable_flag_preserved(self):
+        """Phase 3 operations should preserve reloadable flag."""
+        df = pd.DataFrame({"a": [1, None, 3]})
+        q = Q(df, source_path="test.csv")
+        
+        assert q.reloadable is True
+        
+        q2 = q.fillna(0).dropna().replace(0, 1)
+        assert q2.reloadable is True
+
+"""Comprehensive tests for deterministic and reloadable flags."""
+
+
+
+
+class TestDeterministicFlag:
+    """Tests for the deterministic flag functionality."""
+    
+    def test_deterministic_true_by_default(self):
+        """Q should be deterministic by default."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        assert q.deterministic
+    
+    def test_deterministic_after_operations(self):
+        """Deterministic operations should preserve flag."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        q2 = q.assign(y=lambda x: x.x * 2).filter(lambda x: x.y > 2)
+        assert q2.deterministic
+    
+    def test_sample_without_seed_not_deterministic(self):
+        """Sample without seed should mark as non-deterministic."""
+        df = pd.DataFrame({"x": range(100)})
+        q = Q(df)
+        q2 = q.sample(10)  # No random_state
+        assert not q2.deterministic
+    
+    def test_sample_with_seed_deterministic(self):
+        """Sample with seed should remain deterministic."""
+        df = pd.DataFrame({"x": range(100)})
+        q = Q(df)
+        q2 = q.sample(10, random_state=42)
+        assert q2.deterministic
+    
+    def test_deterministic_propagates_through_concat(self):
+        """Concat should propagate deterministic flag."""
+        df1 = pd.DataFrame({"x": [1, 2]})
+        df2 = pd.DataFrame({"x": [3, 4]})
+        q1 = Q(df1)
+        q2 = Q(df2)
+        
+        # Both deterministic
+        q3 = q1.concat(q2)
+        assert q3.deterministic
+        
+        # One non-deterministic
+        q2_sample = q2.sample(1)
+        q4 = q1.concat(q2_sample)
+        assert not q4.deterministic
+    
+    def test_deterministic_false_with_deep_copy_false(self):
+        """deep_copy=False should set deterministic to False."""
+        df1 = pd.DataFrame({"x": [1, 2]})
+        df2 = pd.DataFrame({"x": [3, 4]})
+        q1 = Q(df1)
+        q2 = Q(df2)
+        q3 = q1.concat(q2, deep_copy=False)
+        assert not q3.deterministic
+    
+    def test_rebase_sets_deterministic_true(self):
+        """Rebase should set deterministic to True (empty history)."""
+        df = pd.DataFrame({"x": range(100)})
+        q = Q(df)
+        q2 = q.sample(10)  # Non-deterministic
+        assert not q2.deterministic
+        
+        q3 = q2.rebase()
+        assert q3.deterministic  # Empty history is deterministic
+
+
+class TestReloadableFlag:
+    """Tests for the reloadable flag functionality."""
+    
+    def test_reloadable_with_source_path(self, tmp_path):
+        """Q with source_path should be reloadable."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("x\n1\n2\n")
+        
+        df = _load_csv_to_dataframe(str(csv_file))
+        q = Q(df, source_path=str(csv_file))
+        assert q.reloadable
+    
+    def test_not_reloadable_without_source_path(self):
+        """Q without source_path should not be reloadable."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        assert not q.reloadable
+    
+    def test_reloadable_after_operations(self, tmp_path):
+        """Operations should preserve reloadable flag."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("x\n1\n2\n3\n")
+        
+        df = _load_csv_to_dataframe(str(csv_file))
+        q = Q(df, source_path=str(csv_file))
+        q2 = q.assign(y=lambda x: x.x * 2).filter(lambda x: x.y > 2)
+        assert q2.reloadable
+    
+    def test_rebase_sets_reloadable_false(self, tmp_path):
+        """Rebase should set reloadable to False."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("x\n1\n2\n3\n")
+        
+        df = _load_csv_to_dataframe(str(csv_file))
+        q = Q(df, source_path=str(csv_file))
+        assert q.reloadable
+        
+        q2 = q.filter(lambda x: x.x > 1).rebase()
+        assert not q2.reloadable
+    
+    def test_reloadable_propagates_through_concat(self, tmp_path):
+        """Concat should propagate reloadable flag."""
+        csv1 = tmp_path / "file1.csv"
+        csv2 = tmp_path / "file2.csv"
+        csv1.write_text("x\n1\n")
+        csv2.write_text("x\n2\n")
+        
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
+        q1 = Q(df1, source_path=str(csv1))
+        q2 = Q(df2, source_path=str(csv2))
+        
+        # Both reloadable
+        q3 = q1.concat(q2)
+        assert q3.reloadable
+        
+        # One not reloadable
+        q2_rebased = q2.rebase()
+        q4 = q1.concat(q2_rebased)
+        assert not q4.reloadable
+    
+    def test_reloadable_false_with_deep_copy_false(self, tmp_path):
+        """deep_copy=False should set reloadable to False."""
+        csv1 = tmp_path / "file1.csv"
+        csv2 = tmp_path / "file2.csv"
+        csv1.write_text("x\n1\n")
+        csv2.write_text("x\n2\n")
+        
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
+        q1 = Q(df1, source_path=str(csv1))
+        q2 = Q(df2, source_path=str(csv2))
+        q3 = q1.concat(q2, deep_copy=False)
+        assert not q3.reloadable
+
+
+class TestReloadWithPartialReload:
+    """Tests for reload() with allow_partial_reload parameter."""
+    
+    def test_reload_fails_without_allow_partial_after_rebase(self, tmp_path):
+        """Reload should fail if tree contains non-reloadable Q."""
+        csv1 = tmp_path / "file1.csv"
+        csv2 = tmp_path / "file2.csv"
+        csv1.write_text("x\n1\n2\n")
+        csv2.write_text("x\n3\n4\n")
+        
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
+        q1 = Q(df1, source_path=str(csv1))
+        q2 = Q(df2, source_path=str(csv2))
+        
+        # Rebase q2, making it non-reloadable
+        q2_rebased = q2.rebase()
+        q3 = q1.concat(q2_rebased)
+        
+        # Should fail without allow_partial_reload
+        with pytest.raises(ValueError, match="not reloadable"):
+            q3.reload()
+    
+    def test_reload_succeeds_with_allow_partial(self, tmp_path):
+        """Reload with allow_partial_reload should use current state for non-reloadable Qs."""
+        csv1 = tmp_path / "file1.csv"
+        csv2 = tmp_path / "file2.csv"
+        csv1.write_text("x\n1\n2\n")
+        csv2.write_text("x\n3\n4\n")
+        
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
+        q1 = Q(df1, source_path=str(csv1))
+        q2 = Q(df2, source_path=str(csv2))
+        
+        # Rebase q2
+        q2_rebased = q2.rebase()
+        q3 = q1.concat(q2_rebased)
+        
+        # Update csv1
+        csv1.write_text("x\n10\n20\n")
+        
+        # Should succeed with allow_partial_reload
+        q4 = q3.reload(allow_partial_reload=True)
+        assert len(q4) == 4
+        # First two rows from updated csv1, last two from q2_rebased's current state
+        assert 10 in q4.to_df()["x"].values
+        assert 20 in q4.to_df()["x"].values
+    
+    def test_reload_without_source_path_fails(self):
+        """Reload should fail if Q has no source path."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        
+        with pytest.raises(ValueError, match="no source path"):
+            q.reload()
+    
+    def test_reload_without_source_succeeds_with_allow_partial(self):
+        """Reload with allow_partial_reload should return self if no source."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        
+        q2 = q.reload(allow_partial_reload=True)
+        assert q2 is q  # Same object
+
+
+class TestRebaseFlags:
+    """Tests for rebase() flag behavior."""
+    
+    def test_rebase_deterministic_true(self, tmp_path):
+        """Rebase should always set deterministic=True."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("x\n" + "\n".join(str(i) for i in range(100)))
+        
+        df = _load_csv_to_dataframe(str(csv_file))
+        q = Q(df, source_path=str(csv_file))
+        
+        # Make non-deterministic
+        q2 = q.sample(10)
+        assert not q2.deterministic
+        
+        # Rebase should set to True
+        q3 = q2.rebase()
+        assert q3.deterministic
+    
+    def test_rebase_reloadable_false(self, tmp_path):
+        """Rebase should always set reloadable=False."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("x\n1\n2\n3\n")
+        
+        df = _load_csv_to_dataframe(str(csv_file))
+        q = Q(df, source_path=str(csv_file))
+        assert q.reloadable
+        
+        q2 = q.filter(lambda x: x.x > 1).rebase()
+        assert not q2.reloadable
+    
+    def test_rebase_keeps_source_path(self, tmp_path):
+        """Rebase should keep source_path but Q is not reloadable."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("x\n1\n2\n3\n")
+        
+        df = _load_csv_to_dataframe(str(csv_file))
+        q = Q(df, source_path=str(csv_file))
+        q2 = q.filter(lambda x: x.x > 1).rebase()
+        
+        # Still has source_path
+        assert q2._source_path == str(csv_file)
+        # But not reloadable
+        assert not q2.reloadable
+        # Reload should fail
+        with pytest.raises(ValueError, match="not reloadable"):
+            q2.reload()
+
+
+class TestFlagPropagationMultiQ:
+    """Tests for flag propagation through multi-Q operations."""
+    
+    def test_merge_propagates_both_flags(self, tmp_path):
+        """Merge should propagate both deterministic and reloadable."""
+        csv1 = tmp_path / "file1.csv"
+        csv2 = tmp_path / "file2.csv"
+        csv1.write_text("id,x\n1,10\n2,20\n")
+        csv2.write_text("id,y\n1,100\n2,200\n")
+        
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
+        q1 = Q(df1, source_path=str(csv1))
+        q2 = Q(df2, source_path=str(csv2))
+        
+        # Both deterministic and reloadable
+        q3 = q1.merge(q2, on='id')
+        assert q3.deterministic
+        assert q3.reloadable
+        
+        # One non-deterministic
+        q2_sample = q2.sample(1)
+        q4 = q1.merge(q2_sample, on='id')
+        assert not q4.deterministic
+        assert q4.reloadable  # Still reloadable
+        
+        # One non-reloadable
+        q2_rebased = q2.rebase()
+        q5 = q1.merge(q2_rebased, on='id')
+        assert q5.deterministic  # Both were deterministic before rebase
+        assert not q5.reloadable
+    
+    def test_union_propagates_flags(self, tmp_path):
+        """Union should propagate flags through concat."""
+        csv1 = tmp_path / "file1.csv"
+        csv2 = tmp_path / "file2.csv"
+        csv1.write_text("x\n1\n2\n")
+        csv2.write_text("x\n2\n3\n")
+        
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
+        q1 = Q(df1, source_path=str(csv1))
+        q2 = Q(df2, source_path=str(csv2))
+        
+        q3 = q1.union(q2)
+        assert q3.deterministic
+        assert q3.reloadable
+    
+    def test_intersect_propagates_flags(self, tmp_path):
+        """Intersect should propagate flags."""
+        csv1 = tmp_path / "file1.csv"
+        csv2 = tmp_path / "file2.csv"
+        csv1.write_text("x\n1\n2\n3\n")
+        csv2.write_text("x\n2\n3\n4\n")
+        
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
+        q1 = Q(df1, source_path=str(csv1))
+        q2 = Q(df2, source_path=str(csv2))
+        
+        q3 = q1.intersect(q2)
+        assert q3.deterministic
+        assert q3.reloadable
+        
+        # With non-deterministic Q
+        q2_sample = q2.sample(2)
+        q4 = q1.intersect(q2_sample)
+        assert not q4.deterministic
+        assert q4.reloadable
+    
+    def test_difference_propagates_flags(self, tmp_path):
+        """Difference should propagate flags."""
+        csv1 = tmp_path / "file1.csv"
+        csv2 = tmp_path / "file2.csv"
+        csv1.write_text("x\n1\n2\n3\n")
+        csv2.write_text("x\n2\n3\n4\n")
+        
+        df1 = _load_csv_to_dataframe(str(csv1))
+        df2 = _load_csv_to_dataframe(str(csv2))
+        q1 = Q(df1, source_path=str(csv1))
+        q2 = Q(df2, source_path=str(csv2))
+        
+        q3 = q1.difference(q2)
+        assert q3.deterministic
+        assert q3.reloadable
+
+
+class TestReplayVsReload:
+    """Tests to verify replay() and reload() work correctly."""
+    
+    def test_replay_works_without_source(self):
+        """replay() should work without source_path."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        q2 = q.assign(y=lambda x: x.x * 2).filter(lambda x: x.y > 2)
+        
+        q3 = q2.replay()
+        assert len(q3) == 2
+        assert list(q3.to_df()["y"]) == [4, 6]
+    
+    def test_replay_works_on_non_deterministic(self):
+        """replay() should work even on non-deterministic Q (may give different results)."""
+        df = pd.DataFrame({"x": range(100)})
+        q = Q(df)
+        q2 = q.sample(10)  # Non-deterministic
+        
+        # Should work (but results may vary)
+        q3 = q2.replay()
+        assert len(q3) == 10
+        assert not q3.deterministic
+    
+    def test_reload_requires_source(self):
+        """reload() requires source_path."""
+        df = pd.DataFrame({"x": [1, 2, 3]})
+        q = Q(df)
+        
+        with pytest.raises(ValueError, match="no source path"):
+            q.reload()
+    
+    def test_reload_reloads_from_disk(self, tmp_path):
+        """reload() should reload from disk."""
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text("x\n1\n2\n3\n")
+        
+        df = _load_csv_to_dataframe(str(csv_file))
+        q = Q(df, source_path=str(csv_file))
+        q2 = q.assign(y=lambda x: x.x * 2)
+        
+        # Update file
+        csv_file.write_text("x\n10\n20\n30\n")
+        
+        # Reload gets new data
+        q3 = q2.reload()
+        assert list(q3.to_df()["x"]) == [10, 20, 30]
+        assert list(q3.to_df()["y"]) == [20, 40, 60]
+

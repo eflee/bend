@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bend"
-version = "2.0.0"
+version = "2.1.0"
 description = "Essentially pandas with training wheels + change tracking + CLI convenience. Load any CSV and start analyzing with a functional query interface."
 readme = "README.md"
 license = {text = "MIT"}

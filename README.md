@@ -167,7 +167,7 @@ by_region = q.groupby(
 
 ## Method Documentation
 
-Complete reference for all 37 methods and 4 properties: **[📖 Full Documentation](docs/README.md)**
+Complete reference for all 40 methods and 4 properties: **[📖 Full Documentation](docs/README.md)**
 
 ### Quick Reference by Category
 
@@ -201,6 +201,12 @@ Select and order rows:
 - **[`sample()`](docs/row-operations/sample.md)** - Random sample
 - **[`sort()`](docs/row-operations/sort.md)** - Sort by columns
 - **[`distinct()`](docs/row-operations/distinct.md)** - Remove duplicates
+
+#### 🧹 Data Quality
+Handle missing values and clean data:
+- **[`dropna()`](docs/data-quality/dropna.md)** - Remove rows with nulls
+- **[`fillna()`](docs/data-quality/fillna.md)** - Fill missing values
+- **[`replace()`](docs/data-quality/replace.md)** - Replace specific values
 
 #### 📈 Aggregations
 Compute statistics:
@@ -242,10 +248,14 @@ result = (Q(load_csv('raw.csv'))
 ### Data Quality
 
 ```python
+# Clean dataset with multiple quality issues
 clean = (q
-    .filter(lambda x: x.email and '@' in x.email)
-    .filter(lambda x: 0 <= x.age <= 120)
-    .distinct('customer_id')
+    .dropna('email', 'phone')  # Remove rows missing critical fields
+    .fillna({'age': 0, 'city': 'Unknown'})  # Fill other nulls
+    .replace({'status': {'old': 'inactive', 'new': 'active'}})  # Standardize values
+    .filter(lambda x: x.email and '@' in x.email)  # Validate email
+    .filter(lambda x: 0 <= x.age <= 120)  # Validate age range
+    .distinct('customer_id')  # Remove duplicates
 )
 ```
 
@@ -381,9 +391,15 @@ Check `q.deterministic`. Use `random_state` in `sample()` and `deep_copy=True` i
 
 ## Version
 
-**2.0.0** - Multi-DataFrame operations, reproducibility tracking
+**2.1.0** - Data Quality operations
 
 ### Changelog
+
+**2.1.0:**
+- Added data quality methods: `dropna()`, `fillna()`, `replace()`
+- `dropna()` as wrapper around `filter()` for removing rows with nulls
+- `fillna()` for filling missing values (scalar or column-specific mapping)
+- `replace()` for value replacement (scalar or column-specific mapping)
 
 **2.0.0:**
 - **BREAKING**: `extend()` renamed to `assign()` (aligns with pandas)

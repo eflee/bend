@@ -144,10 +144,17 @@ Implemented with **deep copy by default** approach:
 - `reload()` is **deep/recursive** (reloads entire tree from disk)
 - Use `rebase()` to drop deep copies and flatten history
 
-### Phase 3: Data Quality
-- [ ] `fillna(value)` or `fillna(mapping)` - Fill missing values
-- [ ] `dropna()` or `dropna(*cols)` - Remove rows with nulls
-- [ ] `replace(mapping)` - Value replacement
+### Phase 3: Data Quality - ✅ COMPLETED
+- [x] `fillna(value)` or `fillna(mapping)` - Fill missing values (COMPLETED)
+- [x] `dropna()` or `dropna(*cols)` - Remove rows with nulls (COMPLETED)
+- [x] `replace(mapping)` - Value replacement (COMPLETED)
+
+**Implementation notes:**
+- `dropna()` is a **wrapper around `filter()`** for cleaner null handling
+- Supports `how='any'` (default) and `how='all'` for multi-column checks
+- `fillna()` and `replace()` tracked as change types in history
+- All three methods are **deterministic** and preserve **reloadable** flag
+- Comprehensive test coverage in `tests/test_phase3.py` (29 tests, all passing)
 
 ### Phase 4: Complex Operations (Design Required)
 - [ ] Window functions - Row isolation vs context trade-off
